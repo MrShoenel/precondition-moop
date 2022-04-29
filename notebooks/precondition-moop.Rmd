@@ -1,0 +1,194 @@
+---
+title: "Pre-conditioning of multi-objective optimization problems"
+author: "Sebastian Hönel"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+bibliography: ../inst/REFERENCES.bib
+papersize: a4
+urlcolor: blue
+output:
+  bookdown::pdf_document2:
+    fig_caption: yes
+    number_sections: yes
+    toc: no
+    toc_depth: 6
+    df_print: kable
+    keep_tex: yes
+  md_document:
+    toc: yes
+    toc_depth: 6
+    df_print: kable
+    variant: gfm
+  html_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+    df_print: kable
+  word_document: default
+header-includes:
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{bm}
+- \usepackage{mathtools}
+- \usepackage{interval}
+- \usepackage{xurl}
+- \usepackage[nottoc]{tocbibind}
+---
+
+\intervalconfig{
+    soft open fences
+}
+
+\newcommand*\mean[1]{\overline{#1}}
+\newcommand{\abs}[1]{\left\lvert\,#1\,\right\rvert}
+\newcommand{\norm}[1]{\left\lVert\,#1\,\right\rVert}
+\newcommand{\infdiv}[2]{#1\;\|\;#2}
+\newcommand\argmax[1]{\underset{#1}{arg\,max}}
+\newcommand\argmin[1]{\underset{#1}{arg\,min}}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Introduction
+
+Multi-objective optimization problems (MOOPs) attempt to find solutions for a set of _non-aggregable_ objectives.
+MOOPs are commonly formulated as in \eqref{eq:moop}:
+
+\begin{align}
+  \min_{\mathbf{x}\in\mathcal{X}}\,\left(f_1(\mathbf{x}),\dots,f_n(\mathbf{x})\right).\label{eq:moop}
+\end{align}
+
+
+Non-aggregable refers to conflicting objectives with differing range.
+A solution $\mathbf{s}_1$ dominates another solution $\mathbf{s}_2$ iff $\norm{\mathbf{s}_1}<\norm{\mathbf{s}_2}$ and $\forall\,s\in\left(\mathbf{s}_1-\mathbf{s}_2\right)\,s\leq0$.
+Furthermore, non-aggregable means that we cannot make any assumptions about the _trade-off_ between found solutions for single objectives, except for the stated dominance assumption.
+The scalarizer in a MOOP is only means to an end, one has to inspect the resulting solution. The scalarizer in MOOPs does not technically transform a MOOP into a single-objective optimization problem (SOOP), because its value when a solution is found is meaningless.
+
+However, we suggest using a form of __pre-conditioning__ for MOOPs that allows the scalarizer to quantify the trade-off between objectives and therefore relaxes the dominance assumption.
+With the relaxation in place, the scalarizer's value becomes meaningful in that we can use it to compare solutions. If we were to do minimization, then a lower scalarized value would mean that a more optimal solution was found.
+
+
+## Transforming objectives to scores
+
+Commonly, objectives in MOOPs each have their own range (_magnitude_). To address this problem, objectives may be scaled into a dimensionless unit scale. This is done by defining $f'_i=f_i\times\left(z_i^{\mathrm{nad}}-z_i^{\mathrm{**}}\right)^{-1}$, where the _nadir_- and _utopian_ (**) vectors are, simply speaking, the worst and ideal objective vectors (refer to [@miettinen2008] for a more precise definition).
+However, while this scaling results in objectives with a range of $\interval{0}{1}$ (which we call __scores__), these scores do __not__ have linear behavior. For example, a score of $0.9$ might not be better by $0.1$ than a score of $0.8$, but considerably better if high scores are hard to obtain for a specific objective.
+
+Pre-conditioning of scores refers to transforming such raw scores into ones with linear behavior.
+It can be achieved by approximating the empirical cumulative distribution ($\operatorname{ECDF}$) of an objective and then using this function to scale and _rectify_ an objective's values.
+Furthermore, this approach does not require to scale by the range as established by nadir- and utopian vectors. While the nadir-vector is usually difficult to obtain, the utopian vector is the result of minimizing each objective separately in order to obtain the lowest possible loss.
+
+In order to approximate the $\operatorname{ECDF}_i$, we can take $k$ uniformly chosen samples $\mathbf{h}$ \eqref{eq:hp-samples} from the hyperparameter space $\mathbf{H}$ \eqref{eq:hp-space} (where $k\lll m$) and compute losses for each $i$-th objective \eqref{eq:ith-obj}.
+The observed losses are then used to approximate the marginal distribution of this objective and to create a uniform score with linear behavior \eqref{eq:ith-score}.
+
+\begin{align}
+  \mathbf{H}&\dots\text{matrix with dimensions }m\times n\label{eq:hp-space},
+  \\[1ex]
+  \mathbf{h}&\dots\text{matrix with dimensions }k\times n\text{ (}\mathbf{h}\sim\mathbb{U}_{\mathbf{H}}\text{),}\label{eq:hp-samples}
+  \\[1ex]
+  \mathcal{O}_i&:\mathbb{R}^{n}\mapsto\mathbb{R}^{+}\cup\{0\}\text{ (loss; lower is better)}\label{eq:ith-obj},
+  \\[1ex]
+  \mathcal{S}_i&=1-\operatorname{ECDF}\left(\mathcal{O}_i(\mathbf{h})\right)\label{eq:ith-score}.
+\end{align}
+
+
+If all of the objectives in a scalarizer were such pre-conditioned scores, then its resulting values can be used to compare solutions, which was not previously possible.
+
+
+
+# Examples
+
+Here, we show some examples where this may be useful.
+
+
+## Optimizing volume and price of packages
+
+In this problem, we want to reduce the volume of packages, while simultaneously increasing the price.
+In other words, we want to produce smaller items and sell them at a higher price.
+Note that the corresponding pre-conditioned scores are defined as $\mathcal{S}^{\mathrm{vol}}=1-\operatorname{ECDF}^{\mathrm{vol}}$ and $\mathcal{S}^{\mathrm{price}}=\operatorname{ECDF}^{\mathrm{price}}$, respectively, such that a relatively low observed volume has a high score, and a relatively high observed price has a high score.
+This problem has no ground truth.
+It is a classical MOOP where the decision maker may express some __preference__ for the trade-off of a desirable solution.
+
+__Goal__: Learn hyperparameters that maximize the scalarizer given the trade-off preference.
+
+__Formulation__: The scalarizer is perhaps simply defined as in \eqref{eq:ex1-scalarizer} and the optimization lies in finding the hyperparameters that maximize it \eqref{eq:ex1-argmax}.
+
+
+\begin{align}
+  \mathcal{O}(\mathbf{h})&=w_1\mathcal{S}^{\mathrm{vol}}+w_2\mathcal{S}^{\mathrm{price}}\label{eq:ex1-scalarizer}\text{ (scalarizer),}
+  \\[1ex]
+  \argmax{\mathbf{h}\in\mathcal{H}}\,\mathcal{O}(\mathbf{h})&\label{eq:ex1-argmax}\text{ (maximization problem)}.
+\end{align}
+
+
+Perturbations to the preference (weights) can lead to different Pareto optimal solutions. However, since the scalarizer's value gives an indication as to the _absolute_ goodness of the solution (since the trade-off is now perfectly quantifiable), we can select the best solution among a set of solutions that were produced with the same preference.
+The conjecture is, however, that this scalarizer produces unique Pareto optimal solutions. This means that in this case, there is a unique Pareto optimal solution for every possible realization of the preference.
+
+
+
+## Czech problem: Finding variable importance
+
+In this problem, we have a ground truth \eqref{eq:cz-gt} and hundreds of objectives. Each objective measures the deviation from some ideal continuous process model, in a specific segment.
+We pre-condition these objectives by simulating a large number of random processes as they may occur in reality. We do this to obtain losses as they typically occur given the _constant_ process model (i.e., what is a typical deviation from the process model in a given segment).
+In the next step, we take the $15$ processes that were actually observed (the student projects) and compute the losses for each project and each objective. This results in a loss matrix $\mathbf{L}^{m\times n}$, where $m$ is the projects, and $n$ the objective.
+Next, this loss matrix is transformed into a score matrix $\mathbf{S}^{m\times n}$ \eqref{eq:score-mat}, by plugging each project's $n$-th loss into the corresponding $\operatorname{ECCDF}$ (i.e., $1-\operatorname{ECDF}$) as approximated before (a low observed loss corresponds to a high score).
+
+__Goal__: Find variable importances such that we can learn which loss in which segment is important in order to predict the ground truth.
+
+__Formulation__: We use the words _variable importance_ instead of weights, as the scalarizer is a weighted mean \eqref{eq:cz-scalarizer}. In it, all coefficients must be larger than or equal to $0$, but not all of them can be $0$. Instead of a constraint, we use a piece-wise definition \eqref{eq:correct-ratios} where all weights are set to $1$ when they are all zero, as they all are equally important (we do this for numeric stability so we are not dividing by $0$).
+
+
+\begin{align}
+  \mathbf{S}&\dots m\times n\text{ matrix of projects' scores,}\label{eq:score-mat}
+  \\[1ex]
+  \mathbf{y}&\dots\text{ vector of length $m$ containing the ground truth,}\label{eq:cz-gt}
+  \\[1ex]
+  \mathbf{w}&\dots\text{ weight vector with $n$ weights,}\nonumber
+  \\[1ex]
+  \mathbf{w}'&=\begin{cases}
+      \mathbf{1},&\text{if}\;\norm{\mathbf{w}}=0\;\text{(set to vector of ones),}
+      \\
+      \mathbf{w},&\text{otherwise,}
+  \end{cases}\label{eq:correct-ratios}
+  \\[1ex]
+  \mathcal{O}(\mathbf{w})&=\frac{1}{m}\sum_{i=1}^{m}\,\left(y_i-\left[\sum_{j=1}^{n}\,w_j \mathbf{S}_{i,j}\norm{\mathbf{w}}_1^{-1}\right]\right)^2\text{ (scalarizer),}\label{eq:cz-scalarizer}
+  \\[1ex]
+  \argmin{\mathbf{w}\in\mathcal{W}}\,\mathcal{O}(\mathbf{w}')&\text{ (minimization problem),}\label{eq:cz-problem}
+  \\[1ex]
+  \text{subject to }&\forall\,w\in\bm{w},w\geq0\;\land\;\norm{\bm{w}}>0\nonumber,
+  \\[1ex]
+  &\text{within the box bounds }\interval{0}{1}\nonumber.
+\end{align}
+
+
+Obviously, here we want to minimize the deviation between the ground truth and the predicted ground truth \eqref{eq:cz-problem}. The variable importances can directly be used in a regression model (using the scalarizer from the objective).
+
+
+
+# Research
+
+Here we list a few open problems that could be subject to potential research.
+
+* Pre-conditioned scores lead to _proper_ Pareto optimal solutions, where _properly_ refers to unbounded trade-offs between the objectives __not__ being allowed. In fact, not only are the trade-offs bounded, but further _comparable_. We need to investigate what the impact of this is.
+* Specifying preference with ordinary or simply scaled objectives in a MOOP may not lead to the desired result. We would have to investigate if using pre-conditioned scores alleviates the problem. The role of weights (relative importance) has been shown to be often misleading (e.g., @roy1996theoretical). We have to investigate if this role is more clear now using pre-conditioned scores.
+* Conjecture: A linear scalarizer using pre-conditioned scores produces a) provably Pareto optimal solutions, and b) unique solutions (same preference leads to the same solution).
+* An evenly distributed set of weights does not necessarily produce an evenly distributed representation of the Pareto optimal set, even if the problem is convex. We would need to investigate if this still applies when using pre-conditioned scores instead of raw or scaled objectives.
+
+
+
+
+
+# References {-}
+
+<div id="refs"></div>
+
+
+
+
+
+
+
+
+
+
