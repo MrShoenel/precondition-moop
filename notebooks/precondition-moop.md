@@ -356,9 +356,10 @@ results are useless. Therefore, we need to re-define the problem in a
 more numerically stable way.
 
 We will use the following surrogate functions to map the objectives of
-the optimization problem into a more numerically stable range. In
-pre-conditioning, we want to learn a **bijective** function that maps a
-loss to a score, so this is a valid thing to do.
+the optimization problem into a more numerically stable range
+(log -transform). In pre-conditioning, we want to learn a **bijective**
+function that maps a loss to a score, so this is a valid thing to do, as
+long as we apply the *same* transformation to *all* objectives.
 
 ``` r
 ex1_f1_prime <- function(x) {
@@ -510,8 +511,8 @@ transform it into a score (i.e., low loss equals high score). For this,
 we will uniformly sample from the hyperparameter space. For this
 problem, we have *i* parameters. The samples’ matrix will therefore have
 dimensions *m* × *i*, where *m* is the number of samples we wish to
-draw. This number should be *l**l*∥ ℋ ∥, i.e., much fewer samples than
-the hyperparameter space’s size. Here, we will draw 1, 000 samples.
+draw. This number should be  ≪ ∥ ℋ ∥, i.e., much fewer samples than the
+hyperparameter space’s size. Here, we will draw 1, 000 samples.
 
 For this, we will create another (but smaller) random grid that will be
 used to sample from the solution space of
@@ -607,7 +608,7 @@ c(ex1_f1(res$solution), ex1_f2(res$solution))
 
 We notice a problem here. When running this repeatedly (even with
 different seeds), the optimizer stops after a single iteration. Also,
-the losses are quite large. This indicates, that the problem cannot
+the losses are quite large. This indicates that the problem cannot
 converge at all. Let’s check the gradients:
 
 ``` r
@@ -622,9 +623,9 @@ Here is a problem. The gradient is always zero for all variables. Let’s
 attempt the following: Instead of estimating the ECDF, we will fit a
 parametric distribution. In fact, let’s test the normal distribution,
 since the ECDFs looked quite like the CDFs of a normal distribution. In
-practice, one would perhaps be better of attempting to fit a wider range
-of potential distributions, then going with the best (using, e.g., the
-*D*-statistic of the KS-test).
+practice, one would perhaps be better off attempting to fit a wider
+range of potential distributions, then going with the best (using, e.g.,
+the *D*-statistic of the KS-test).
 
 ``` r
 ex1_f1_eccdf_norm <- function(x) {
@@ -635,13 +636,14 @@ ex1_f2_eccdf_norm <- function(x) {
 }
 ```
 
-The ECCDF s of figure look quite similar to those we got empirically.
-They do have a two advantages, though. First, smoothness – we should not
-end up with all zeros for the gradients. Second, an ECDF  returns 0 for
-values less than any of the observed ones, and 1 for values beyond the
-observed range. The parametric CDF  however will never really reach 0 or
-1, which means that even tiny differences in *x* will result in tiny
-differences in *y*, before and beyond the actually observed values.
+The CCDF s of figure look quite similar to the ECCDF s we got
+empirically. They do have a two advantages, though. First, smoothness –
+we should not end up with all zeros for the gradients. Second, an ECDF 
+returns 0 for values less than any of the observed ones, and 1 for
+values beyond the observed range. The parametric CDF  however will never
+really reach 0 or 1, which means that even tiny differences in *x* will
+result in tiny differences in *y*, before and beyond the actually
+observed values.
 
 ``` r
 par(mfrow = c(1, 2))

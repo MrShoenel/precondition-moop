@@ -333,8 +333,8 @@ So it appears that we cannot actually optimize the problem in its original form,
 If the changes are too small, then so is the gradient. With the maximum possible loss (given random starting values), the trade-off of $1$:$1$ is always the same and the results are useless.
 Therefore, we need to re-define the problem in a more numerically stable way.
 
-We will use the following surrogate functions to map the objectives of the optimization problem into a more numerically stable range.
-In pre-conditioning, we want to learn a __bijective__ function that maps a loss to a score, so this is a valid thing to do.
+We will use the following surrogate functions to map the objectives of the optimization problem into a more numerically stable range ($\log$-transform).
+In pre-conditioning, we want to learn a __bijective__ function that maps a loss to a score, so this is a valid thing to do, as long as we apply the _same_ transformation to _all_ objectives.
 
 
 ```{r}
@@ -468,16 +468,20 @@ Now we show the Pareto front in figure \ref{fig:ex1-pareto-front}. The optimizat
 plot(x = res$f1, y = res$f2,
      xlab = latex2exp::TeX("$f_1(x)$"), ylab = latex2exp::TeX("$f_2(x)$"),
      main = "Pareto front as found using a numerically stable version.",
+     sub = "The Pareto front is shown in white.",
      pch = sapply(X = res$optimal, FUN = function(o) if (o) 25 else 1),
      cex = sapply(X = res$optimal, FUN = function(o) if (o) 1 else .4),
      col = sapply(X = res$optimal, FUN = function(o) if (o) "blue" else "#444444"))
+grid()
 
 temp <- res[res$optimal, ]
 ex1_pareto_front <- temp[order(temp$f1), ]
 
 for (j in 1:(nrow(ex1_pareto_front) - 1)) {
-  lines(x = ex1_pareto_front[j:(j + 1), ]$f1, y = ex1_pareto_front[j:(j + 1), ]$f2)
+  lines(x = ex1_pareto_front[j:(j + 1), ]$f1, y = ex1_pareto_front[j:(j + 1), ]$f2, col = "white", lwd = 1.5)
 }
+
+legend(x = 0, y = .25, pch = c(25, 1), col = c("blue", "#444444"), legend = c("Pareto optimal solution", "dominated solution"))
 ```
 
 ### Pre-conditioning the problem
@@ -485,7 +489,7 @@ for (j in 1:(nrow(ex1_pareto_front) - 1)) {
 The goal is to approximate marginal distribution for each objective. Each objective expresses a loss, so we will be using the $\operatorname{ECCDF}$ later to transform it into a score (i.e., low loss equals high score).
 For this, we will uniformly sample from the hyperparameter space.
 For this problem, we have $i$ parameters.
-The samples' matrix will therefore have dimensions $m\times i$, where $m$ is the number of samples we wish to draw. This number should be $ll\norm{\mathcal{H}}$, i.e., much fewer samples than the hyperparameter space's size.
+The samples' matrix will therefore have dimensions $m\times i$, where $m$ is the number of samples we wish to draw. This number should be $\ll\norm{\mathcal{H}}$, i.e., much fewer samples than the hyperparameter space's size.
 Here, we will draw $1,000$ samples.
 
 For this, we will create another (but smaller) random grid that will be used to sample from the solution space of $f_1,f_2$.
@@ -552,7 +556,7 @@ c(ex1_f1(res$solution), ex1_f2(res$solution))
 ```
 
 We notice a problem here. When running this repeatedly (even with different seeds), the optimizer stops after a single iteration.
-Also, the losses are quite large. This indicates, that the problem cannot converge at all.
+Also, the losses are quite large. This indicates that the problem cannot converge at all.
 Let's check the gradients:
 
 ```{r}
@@ -563,7 +567,7 @@ pracma::grad(f = function(x) {
 
 Here is a problem. The gradient is always zero for all variables.
 Let's attempt the following: Instead of estimating the ECDF, we will fit a parametric distribution. In fact, let's test the normal distribution, since the ECDFs looked quite like the CDFs of a normal distribution.
-In practice, one would perhaps be better of attempting to fit a wider range of potential distributions, then going with the best (using, e.g., the $D$-statistic of the KS-test).
+In practice, one would perhaps be better off attempting to fit a wider range of potential distributions, then going with the best (using, e.g., the $D$-statistic of the KS-test).
 
 ```{r}
 ex1_f1_eccdf_norm <- function(x) {
@@ -575,7 +579,7 @@ ex1_f2_eccdf_norm <- function(x) {
 ```
 
 
-The $\operatorname{ECCDF}$s of figure \ref{fig:ex1-eccdfs-norm} look quite similar to those we got empirically.
+The $\operatorname{CCDF}$s of figure \ref{fig:ex1-eccdfs-norm} look quite similar to the $\operatorname{ECCDF}$s we got empirically.
 They do have a two advantages, though. First, smoothness -- we should not end up with all zeros for the gradients.
 Second, an $\operatorname{ECDF}$ returns $0$ for values less than any of the observed ones, and $1$ for values beyond the observed range.
 The parametric $\operatorname{CDF}$ however will never really reach $0$ or $1$, which means that even tiny differences in $x$ will result in tiny differences in $y$, before and beyond the actually observed values.
@@ -715,7 +719,7 @@ Figure \ref{fig:ex1-working-tradeoffs} demonstrates how pre-conditioning allows 
 ```{r ex1-working-tradeoffs, echo=FALSE, fig.cap="Working trade-offs using a pre-conditioned version of the first example problem."}
 plot(x = c(), y = c(),
      xlab = latex2exp::TeX("$f_1(x)$"), ylab = latex2exp::TeX("$f_2(x)$"),
-     main = "Convergence towards Pareto front using desired trade-off",
+     main = "Convergence towards Pareto front using desired trade-off.",
      xlim = c(0, max(unlist(lapply(X = templ, function(res) max(res$history[, "f1"]))))),
      ylim = c(0, max(unlist(lapply(X = templ, function(res) max(res$history[, "f2"]))))))
 grid()
@@ -832,7 +836,7 @@ It also appears that each optimization went straight to the solution. In the pre
 ```{r ex1-nadir-tradeoffs, echo=FALSE, fig.cap="Pareto trade-offs using the numerically stabilized version of the first problem, together with normalized objectives."}
 plot(x = c(), y = c(),
      xlab = latex2exp::TeX("$f_1(x)$"), ylab = latex2exp::TeX("$f_2(x)$"),
-     main = "Convergence towards Pareto front using normalized objectives",
+     main = "Convergence towards Pareto front using normalized objectives.",
      xlim = c(0, max(unlist(lapply(X = templ, function(res) max(res$history[, "f1"]))))),
      ylim = c(0, max(unlist(lapply(X = templ, function(res) max(res$history[, "f2"]))))))
 grid()
