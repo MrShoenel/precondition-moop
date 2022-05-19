@@ -1,0 +1,382 @@
+---
+title: "Pre-conditioning of multi-objective optimization problems (problem 2)"
+author: "Sebastian Hönel"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+bibliography: ../inst/REFERENCES.bib
+papersize: a4
+urlcolor: blue
+output:
+  bookdown::pdf_document2:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_depth: 6
+    df_print: kable
+    keep_tex: yes
+  md_document:
+    toc: yes
+    toc_depth: 6
+    df_print: kable
+    variant: gfm
+  html_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+    df_print: kable
+  word_document: default
+header-includes:
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{bm}
+- \usepackage{mathtools}
+- \usepackage{interval}
+- \usepackage{xurl}
+- \usepackage[nottoc]{tocbibind}
+---
+
+\intervalconfig{
+    soft open fences
+}
+
+\newcommand*\mean[1]{\overline{#1}}
+\newcommand{\abs}[1]{\left\lvert\,#1\,\right\rvert}
+\newcommand{\norm}[1]{\left\lVert\,#1\,\right\rVert}
+\newcommand{\infdiv}[2]{#1\;\|\;#2}
+\newcommand\argmax[1]{\underset{#1}{arg\,max}}
+\newcommand\argmin[1]{\underset{#1}{arg\,min}}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv(LANG = "en_US.UTF-8")
+Sys.setenv(LC_ALL = "en_US.UTF-8")
+Sys.setenv(LC_CTYPE = "en_US.UTF-8")
+```
+
+```{r echo=FALSE}
+source(file = "../helpers.R")
+```
+
+
+# Introduction to problem 2
+
+We will try another problem, but this time without the errors we made in the first problem, also avoiding all of the pitfalls.
+In this problem we will demonstrate that finding more accurate trade-offs shall only be possible using a pre-conditioned version of the chosen problem.
+Before attempting this, we will follow every trick in the book to finding a desired and Pareto optimal solution to the chosen problem. That includes:
+
+* Finding ideal- and nadir-vectors. We will do this using a global search to be most certain having found them. These vectors will be used to __scale__ each objective value, as required by the _weigted metrics_ approach we will be using [@zeleny1973compromise].
+* Use a scalarizer that is guaranteed to find Pareto optimal solutions and avoids the shortcomings of the simple weighting method. We will use the augmented Chebyshev scalarizer in this problem for that. Also, we will actually test that each solution obtained is Pareto optimal, using the previously approximated Pareto front. Optimality may also be checked using, e.g., the KKT conditions.
+
+An issue in Problem #1 was that we did not check the obtained trade-offs correctly. This must _always_ be done by obtaining the CDF's value of the loss' value.
+As a first step, we will therefore approximate high-precision ECDFs for each objective, that are only used to obtain the scores later, which will be used to quantify the trade-offs. These ECDFs will __not__ be used in the pre-conditioned version of the problem. We will approximate much lower-resolution ones for that purpose.
+
+
+# The Viennet function
+
+The MOOP we will attempt to find precise trade-offs for is the Viennet function [@viennet1996]. It is defined as in \eqref{eq:viennet}:
+
+
+\begin{align}
+  \min_{x,y\in\mathbb{R}}\,&\begin{cases}
+    f_1(x,y)&=0.5\left(x^2+y^2\right) + \sin{\left(x^2+y^2\right)},
+    \\[1em]
+    f_2(x,y)&=\frac{(3x-2y+4)^2}{8}+\frac{(x-y+1)^2}{27}+15,
+    \\[1ex]
+    f_3(x,y)&=\frac{1}{x^2+y^2+1}-1.1\exp{\left(-x^2-y^2\right)},
+  \end{cases}\label{eq:viennet}
+  \\[1ex]
+  \text{subject to }&-3\leq x,y\leq3\nonumber.
+\end{align}
+
+
+Let's define the Viennet functions and the bounds in code:
+
+```{r}
+lower <- -3
+upper <- 3
+
+ex2_f1 <- function(x, y) {
+  .5 * (x^2 + y^2) + sin(x^2 + y^2)
+}
+ex2_f2 <- function(x, y) {
+  1/8 * (3*x - 2*y + 4)^2 + 1/27 * (x - y + 1)^2 + 15
+}
+ex2_f3 <- function(x, y) {
+  1 / (x^2 + y^2 + 1) - 1.1 * exp(-x^2 -y^2)
+}
+```
+
+
+# TODO:
+
+- Non-linear scaling of Pareto front using scores
+- orderable solutions: request some trade-offs and then order them by their total score (this is perhaps bogus because all solutions are equally good).
+
+# Ideal- and nadir-vectors
+
+We will use global optimization to get a precise idea of either vector, so that we can scale the problem into the range $\interval{0}{1}$.
+The ideal- \eqref{eq:vec-ideal} and nadir-vectors \eqref{eq:vec-nadir} are defined as follows:
+
+\begin{align}
+  \mathbf{z}^{\star}&=\inf_{\mathbf{x}^\star\in\mathbf{X}^\star}\,\mathbf{f}(\mathbf{x}^\star),\label{eq:vec-ideal}
+  \\[1ex]
+  \mathbf{z}^{\mathit{nad}}&=\sup_{\mathbf{x}^\star\in\mathbf{X}^\star}\,\mathbf{f}(\mathbf{x}^\star).\label{eq:vec-nadir}
+\end{align}
+
+
+In other words, we can maximize (minimize) each objective separately in order to find the components of the nadir- and ideal-vectors.
+Let's define a function for that, so we can reuse it.
+
+```{r}
+ex2_nadir_ideal_approx <- function(objective, x0, minimazation = TRUE, lb = rep(lower, length(x0)), ub = rep(upper, length(x0))) {
+  fac <- if (minimazation) 1 else -1
+  res <- nloptr::nloptr(
+    x0 = x0,
+    opts = list(
+      maxeval = 3e5,
+      algorithm = "NLOPT_GN_DIRECT_L_RAND"),
+    eval_f = function(x) {
+      fac * objective(x[1], x[2])
+    },
+    lb = lb,
+    ub = ub)
+  res$objective <- fac * res$objective
+  res
+}
+```
+
+
+## Computing the vectors
+
+Let's compute the vectors. We will use a gradient-free global search and allow up to $300,000$ iterations for each minimization/maximization.
+
+```{r}
+temp.grid <- expand.grid(list(
+  Obj = c("ex2_f1", "ex2_f2", "ex2_f3"),
+  Min = c(TRUE, FALSE)
+))
+
+ex2_nadir_ideal <- loadResultsOrCompute(file = "../results/ex2_nadir_ideal.rds", computeExpr = {
+  doWithParallelCluster(numCores = nrow(temp.grid), expr = {
+    library(foreach)
+    
+    foreach::foreach(
+      rn = rownames(temp.grid),
+      .inorder = FALSE,
+      .combine = rbind,
+      .export = levels(temp.grid$Obj)
+    ) %dopar% {
+      hp <- temp.grid[rn, ]
+      set.seed(1)
+      res <- ex2_nadir_ideal_approx(objective = get(as.character(hp$Obj)), x0 = runif(2, lower, upper), minimazation = hp$Min)
+      cbind(hp, data.frame(Val = res$objective))
+    }
+  })
+})
+```
+
+```{r echo=FALSE}
+if (interactive()) {
+  ex2_nadir_ideal
+} else {
+  knitr::kable(
+    x = ex2_nadir_ideal,
+    booktabs = TRUE,
+    caption = "The nadir- and ideal-vectors for the three objectives of the Viennet problem.",
+    label = "ex2-nadir-ideal"
+  )
+}
+```
+
+
+The result is shown in table \ref{tab:ex2-nadir-ideal}.
+Let's make the two vectors out of it that are more usable:
+
+```{r}
+temp <- ex2_nadir_ideal[ex2_nadir_ideal$Min, ]
+temp <- temp[order(temp$Obj),]
+(ex2_ideal <- `names<-`(x = temp$Val, value = temp$Obj))
+```
+```{r}
+temp <- ex2_nadir_ideal[!ex2_nadir_ideal$Min, ]
+temp <- temp[order(temp$Obj),]
+(ex2_nadir <- `names<-`(x = temp$Val, value = temp$Obj))
+```
+
+## Re-scaling the objectives
+
+With the nadir- and ideal-vectors, we can redefine our objectives and scale them into the range $\interval{0}{1}$.
+Scaling should be done using the __utopian__ vector ($\mathbf{z}^{\star\star}$), which we do not have. It is however often suggested to define it as $\mathbf{z}^\star=\mathbf{z}^{\star}-\epsilon$, where $\epsilon$ is a small constant $>0$.
+
+As the utopian vector dominates all Pareto optimal solutions, we use it instead of the ideal vector to avoid dividing by zero in all cases. [@miettinen2008].
+The re-scaling means that we have to create an utopian vector by subtracting $\epsilon$ from the ideal vector.
+
+```{r}
+ex2_epsilon <- 0.1
+(ex2_utop <- ex2_utop <- ex2_ideal - ex2_epsilon)
+```
+
+
+Let's define the re-scaled objectives. Note we will also change the arguments from $x,y$ to a vector of simply $x$!
+
+```{r}
+ex2_f1_scaled <- function(x) {
+  ex2_f1(x[1], x[2]) / (ex2_nadir[1] - ex2_utop[1])
+}
+ex2_f2_scaled <- function(x) {
+  ex2_f2(x[1], x[2]) / (ex2_nadir[2] - ex2_utop[2])
+}
+ex2_f3_scaled <- function(x) {
+  ex2_f3(x[1], x[2]) / (ex2_nadir[3] - ex2_utop[3])
+}
+```
+
+
+Some scalarizers expect all objectives to have a uniform, dimensionless scale. By dividing each $f_i$ by $z_i^{\mathit{nad}}-z_i^{\star\star}$, its range will become $\interval{a}{b}$, where $b-a\approx1$ (a little less than $1$ since we're dividing by the range that is larger by $\epsilon$).
+
+This expectation also means that we need to re-define the scaled versions of the nadir-, ideal-, and utopian-vectors after the scaling.
+Since we are now in a uniform scale, I suggest reducing $\epsilon$ to $0.001$.
+
+```{r}
+ex2_epsilon_scaled <- 1e-3
+(ex2_nadir_scaled <- ex2_nadir / (ex2_nadir - ex2_utop))
+(ex2_ideal_scaled <- ex2_ideal / (ex2_nadir - ex2_utop))
+(ex2_utop_scaled <- ex2_ideal_scaled - ex2_epsilon_scaled)
+```
+
+
+# Pareto front
+
+Since we have three objectives, the front will be in three dimensions, too.
+We will choose a number of random weight constellations, optimize each, and then obtain an approximate front.
+We will be using the scaled objectives and vectors for this task.
+
+
+## Scalarizer
+
+In order to guarantee to obtain Pareto optimal solutions and to be able to avoid weakly Pareto optimal solutions, we will use a so-called augmented Chebyshev problem \eqref{eq:aug-chebyshev}.
+
+\begin{align}
+  \mathrm{minimize}\,\overbrace{\max_{i=1,\dots,k}{\left[w_i(f_i(\mathbf{x})-z_i^{\star\star})\right]}}^{\text{scalarizer}} + \overbrace{\rho\sum_{i=1}^{k}\,(f_i(\mathbf{x})-z_i^{\star\star})}^{\text{augmentation term}}\label{eq:aug-chebyshev}.
+\end{align}
+
+In code, the scalarizer is defined as:
+
+```{r}
+aug_chebyshev <- function(objectives = list(ex2_f1_scaled, ex2_f2_scaled, ex2_f3_scaled), utop_vec, w_vec, x, rho = 0.01) {
+  objVals <- unlist(lapply(X = objectives, FUN = function(obj) obj(x)))
+  
+  scalarizer <- max(w_vec * (objVals - utop_vec))
+  slope <- rho + sum(objVals - utop_vec)
+  
+  scalarizer + slope
+}
+```
+
+Let's do a test:
+
+```{r}
+set.seed(1)
+aug_chebyshev(utop_vec = ex2_utop_scaled, w_vec = runif(3), x = runif(2, lower, upper))
+```
+
+
+
+## Computing the front
+
+
+
+```{r}
+set.seed(1001)
+constellations <- 1e4
+
+weight_grid <- data.frame(
+  w1 = runif(n = constellations),
+  w2 = runif(n = constellations),
+  w3 = runif(n = constellations))
+```
+
+
+
+
+```{r}
+ex2_pareto_front <- loadResultsOrCompute(file = "../results/ex2_pareto_front.rds", computeExpr = {
+  res <- as.data.frame(doWithParallelCluster(numCores = 15, expr = {
+    library(foreach)
+    
+    foreach::foreach(
+      rn = rownames(weight_grid),
+      .combine = rbind,
+      .inorder = FALSE
+    ) %dopar% {
+      w <- as.numeric(weight_grid[rn,])
+      set.seed(seed = as.numeric(rn))
+      
+      res <- nloptr::nloptr(
+        x0 = runif(n = length(w), min = lower, max = upper),
+        opts = list(
+          maxeval = 2e3,
+          algorithm = "NLOPT_GN_DIRECT_L_RAND"),
+        eval_f = function(x) {
+          aug_chebyshev(utop_vec = ex2_utop, w_vec = w, x = x, rho = .0001)
+        },
+        lb = rep(lower, length(w)),
+        ub = rep(upper, length(w)))
+      
+      `colnames<-`(
+        x = matrix(data = c(ex2_f1_scaled(res$solution), ex2_f2_scaled(res$solution), ex2_f3_scaled(res$resolution),
+                            w, res$objective, res$solution), nrow = 1),
+        value = c("f1", "f2", "f3", "w1", "w2", "w3", "value", "x", "y"))
+    }
+  }))
+  
+  # Next, we have to identify the Pareto front, by selecting non-dominated solutions.
+  res$optimal <- FALSE
+  for (rn in rownames(res)) {
+    this_sol <- res[rn, c("f1", "f2")]
+    others <- res[rn != rownames(res), c("f1", "f2")]
+    res[rn, ]$optimal <- !any(others$f1 < this_sol$f1 & others$f2 < this_sol$f2)
+  }
+  res
+})
+```
+
+
+```{r eval=interactive()}
+rgl::plot3d(x = ex2_pareto_front$f1, y = ex2_pareto_front$f2, z = ex2_pareto_front$f3)
+```
+
+
+```{r eval=FALSE}
+rgl::rgl.snapshot("../results/ex2_pareto_front.png")
+```
+
+The 3-dimensional Pareto front is shown in figure \ref{fig:ex2-pareto-front}.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.95\textwidth]{../results/ex2_pareto_front.png}
+  \caption{The 3-dimensional Pareto front of the Vienna functions (using scaled objectives).}
+  \label{fig:ex2-pareto-front}
+\end{figure}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
