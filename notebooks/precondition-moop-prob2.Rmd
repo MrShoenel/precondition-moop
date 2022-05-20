@@ -71,6 +71,12 @@ An issue in Problem #1 was that we did not check the obtained trade-offs correct
 As a first step, we will therefore approximate high-precision ECDFs for each objective, that are only used to obtain the scores later, which will be used to quantify the trade-offs. These ECDFs will __not__ be used in the pre-conditioned version of the problem. We will approximate much lower-resolution ones for that purpose.
 
 
+## Todo list
+
+- Non-linear scaling of Pareto front using scores
+- orderable solutions: request some trade-offs and then order them by their total score (this is perhaps bogus because all solutions are equally good).
+
+
 # The Viennet function
 
 The MOOP we will attempt to find precise trade-offs for is the Viennet function [@viennet1996]. It is defined as in \eqref{eq:viennet}:
@@ -107,10 +113,6 @@ ex2_f3 <- function(x, y) {
 ```
 
 
-# TODO:
-
-- Non-linear scaling of Pareto front using scores
-- orderable solutions: request some trade-offs and then order them by their total score (this is perhaps bogus because all solutions are equally good).
 
 # Ideal- and nadir-vectors
 
@@ -305,26 +307,26 @@ ex2_pareto_front <- loadResultsOrCompute(file = "../results/ex2_pareto_front.rds
     library(foreach)
     
     foreach::foreach(
-      rn = rownames(weight_grid),
+      idx = 1:nrow(weight_grid),
       .combine = rbind,
       .inorder = FALSE
     ) %dopar% {
-      w <- as.numeric(weight_grid[rn,])
-      set.seed(seed = as.numeric(rn))
+      w <- as.numeric(weight_grid[idx,])
+      set.seed(seed = idx)
       
       res <- nloptr::nloptr(
-        x0 = runif(n = length(w), min = lower, max = upper),
+        x0 = runif(n = 2, min = lower, max = upper),
         opts = list(
           maxeval = 2e3,
           algorithm = "NLOPT_GN_DIRECT_L_RAND"),
         eval_f = function(x) {
           aug_chebyshev(utop_vec = ex2_utop, w_vec = w, x = x, rho = .0001)
         },
-        lb = rep(lower, length(w)),
-        ub = rep(upper, length(w)))
+        lb = rep(lower, 2),
+        ub = rep(upper, 2))
       
       `colnames<-`(
-        x = matrix(data = c(ex2_f1_scaled(res$solution), ex2_f2_scaled(res$solution), ex2_f3_scaled(res$resolution),
+        x = matrix(data = c(ex2_f1_scaled(res$solution), ex2_f2_scaled(res$solution), ex2_f3_scaled(res$solution),
                             w, res$objective, res$solution), nrow = 1),
         value = c("f1", "f2", "f3", "w1", "w2", "w3", "value", "x", "y"))
     }
@@ -333,21 +335,23 @@ ex2_pareto_front <- loadResultsOrCompute(file = "../results/ex2_pareto_front.rds
   # Next, we have to identify the Pareto front, by selecting non-dominated solutions.
   res$optimal <- FALSE
   for (rn in rownames(res)) {
-    this_sol <- res[rn, c("f1", "f2")]
-    others <- res[rn != rownames(res), c("f1", "f2")]
-    res[rn, ]$optimal <- !any(others$f1 < this_sol$f1 & others$f2 < this_sol$f2)
+    this_sol <- res[rn, c("f1", "f2", "f3")]
+    others <- res[rn != rownames(res), c("f1", "f2", "f3")]
+    res[rn, ]$optimal <- !any(others$f1 < this_sol$f1 & others$f2 < this_sol$f2 & others$f3 < this_sol$f3)
   }
   res
 })
 ```
 
 
-```{r eval=interactive()}
+Out of __`r nrow(ex2_pareto_front)`__, a total of __`r sum(ex2_pareto_front$optimal)`__ are Pareto optimal.
+
+```{r echo=FALSE, eval=interactive()}
 rgl::plot3d(x = ex2_pareto_front$f1, y = ex2_pareto_front$f2, z = ex2_pareto_front$f3)
 ```
 
 
-```{r eval=FALSE}
+```{r echo=FALSE, eval=FALSE}
 rgl::rgl.snapshot("../results/ex2_pareto_front.png")
 ```
 
@@ -362,19 +366,517 @@ The 3-dimensional Pareto front is shown in figure \ref{fig:ex2-pareto-front}.
 
 
 
+# The high-precision ECDFs
+
+We will sample a large number of possible losses from each of the three objectives in order to get an understanding of their distribution.
+We thereby establish a bijection between the hyperparameters $\{x,y\}$ (called _decision vector_), and the outcome/objective values (called _objective vector_).
+These high-precision ECDFs will be used to map losses to scores. For that, we will use the notion of an ECCDF, the _complementary_ ECDF, which is defined as $1-\operatorname{ECDF}$.
+Only with a linear (rectified) understanding of how likely each loss actually is, we can quantify the obtained trade-offs.
+
+
+In order to obtain these ECDFs (one per objective), we will sample uniformly from the decision space, within its bounds $-3\leq x,y\leq3$.
+
+
+```{r}
+set.seed(1337)
+ex2_hp_samples <- matrix(ncol = 2, data = runif(n = 2e6, min = lower, max = upper))
+nrow(ex2_hp_samples)
+```
+
+```{r}
+ex2_high_prec_ecdfs <- loadResultsOrCompute(file = "../results/ex2_high_prec_ecdfs.rds", computeExpr = {
+  ecdf_data <- doWithParallelCluster(numCores = 3, expr = {
+    library(foreach)
+    
+    foreach::foreach(
+      idx = 1:3,
+      .inorder = TRUE,
+      .combine = cbind,
+      .export = c(paste0("ex2_f", 1:3), paste0("ex2_f", 1:3, "_scaled"))
+    ) %dopar% {
+      obj <- get(paste0("ex2_f", idx, "_scaled"))
+      temp <- apply(X = ex2_hp_samples, MARGIN = 1, FUN = function(row) obj(row))
+      `colnames<-`(x = matrix(data = temp, ncol = 1), value = paste0("f", idx))
+    }
+  })
+  
+  ecdf_data <- as.data.frame(cbind(ex2_hp_samples, ecdf_data))
+  colnames(ecdf_data) <- c("x", "y", "f1", "f2", "f3")
+  
+  # Let's also approximate the ECDFs and return them:
+  ecdf_funcs <- unlist(doWithParallelCluster(numCores = 3, expr = {
+    library(foreach)
+    
+    foreach::foreach(
+      idx = 1:3,
+      .inorder = TRUE,
+      .combine = list
+    ) %dopar% {
+      templ <- list()
+      templ[[paste0("ecdf_f", idx)]] <- stats::ecdf(ecdf_data[, paste0("f", idx)])
+      templ
+    }
+  }))
+  
+  list(
+    ecdf_data = ecdf_data,
+    ecdf_funcs = ecdf_funcs
+  )
+})
+```
+
+
+Let's plot the losses' distributions as PDFs and CDFs.
+Figure \ref{fig:ex2-high-prec} shows that all three objectives are quite different from each other. It appears that objectives $f_1$ and $f_3$ also follow a somewhat multimodal distribution, while $f_2$ looks like a Log-normal or Gamma distribution.
+In any case, none of the distributions is even close to being a standard uniform distribution.
+
+
+```{r ex2-high-prec, echo=FALSE, fig.cap="The empirical densities and cumulative distributions of the three scaled objectives of the Viennet function.", fig.height=7}
+layout(mat = matrix(data = c(1,2,3,4,5,6), ncol = 2, byrow = TRUE))
+par(mar=c(5,4,1.5,1), oma = rep(0, 4))
+
+for (i in 1:3) {
+  plot(density(ex2_high_prec_ecdfs$ecdf_data[, paste0("f", i)]), main = latex2exp::TeX(paste0("Kernel density of $f_", i, "(x)$")))
+  
+  # Let's first approximate the ECDFs with lower resolution for plotting.
+  ext <- range(ex2_high_prec_ecdfs$ecdf_data[, paste0("f", i)])
+  x <- seq(from = ext[1], to = ext[2], length.out = 1e3)
+  tempf <- stats::approxfun(x = x, y = ex2_high_prec_ecdfs$ecdf_funcs[[paste0("ecdf_f", i)]](x), yleft = 0, yright = 1)
+  curve2(func = tempf, from = ext[1], to = ext[2], ylab = latex2exp::TeX("F(x)"), main = latex2exp::TeX(paste0("Cumulative probability of $f_", i, "(x)$")))
+}
+```
+
+
+# Assessing trade-offs of original problem
+
+With the high-precision ECDFs, we have now the means to transforming any loss from the three objectives into a score. After that transformation, we can put the scores into a vector, normalize it, and compare it to the weights which we used to express our preference.
+
+We can reuse the the results from approximating the Pareto front, as we stored the used weights along the results gotten.
+Before computing the scores, let's define the ECCDFs for that:
+
+```{r}
+ex2_f1_high_prec_eccdf <- function(x) 1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f1(x)
+ex2_f2_high_prec_eccdf <- function(x) 1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f2(x)
+ex2_f3_high_prec_eccdf <- function(x) 1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f3(x)
+```
+
+
+
+```{r}
+ex2_trade_offs_org <- as.data.frame(cbind(
+  ex2_pareto_front[, c("w1", "w2", "w3")],
+  data.frame(
+    s1 = ex2_f1_high_prec_eccdf(ex2_pareto_front$f1),
+    s2 = ex2_f2_high_prec_eccdf(ex2_pareto_front$f2),
+    s3 = ex2_f3_high_prec_eccdf(ex2_pareto_front$f3)
+  )
+))
+head(ex2_trade_offs_org)
+```
+
+Now we can compare the weight vector against the score vector. For each solution, we will normalize both these vectors.
+Then, we perform a nominal-actual comparison for the ratios.
+We will compute 3 types of deviation:
+
+* The mean absolute error; e.g., you requested the ratios $[0.5,0.3,0.2]$, but you got $[0.1,0.5,0.4]$. Then the absolute error is $[0.4, 0.2, 0.2]$, and the mean is $\approx0.2667$. It describes by how much each ratio was off.
+* The RMSE, which is similar to the MAE.
+* An absolute percentual difference. For example, you requested one ratio to be $0.3$, but you got $0.45$. Then the percentual difference for this value is $50$%. If you get $0.15$, the difference is $50$% as well. It is calculated as $\abs{100\times(1-(r^{\mathit{is}}\div r^{\mathit{should}}))}$.
+
+
+```{r}
+ex2_trade_offs_org_diffs <- matrix(ncol = 5, nrow = nrow(ex2_trade_offs_org))
+
+for (i in 1:nrow(ex2_trade_offs_org)) {
+  v1 <- as.numeric(ex2_trade_offs_org[i, c("w1", "w2", "w3")])
+  v2 <- as.numeric(ex2_trade_offs_org[i, c("s1", "s2", "s3")])
+  # Normalize both:
+  v1 <- v1 / sum(v1)
+  v2 <- v2 / sum(v2)
+  
+  ex2_trade_offs_org_diffs[i,] <- c(
+    Metrics::mae(actual = v2, predicted = v1),
+    Metrics::rmse(actual = v2, predicted = v1),
+    abs(100 * (1 - v1/v2))
+  )
+}
+```
+
+```{r}
+head(ex2_trade_offs_org_diffs)
+```
+```{r}
+temp <- ex2_trade_offs_org_diffs[,]
+temp[is.infinite(temp)] <- NA
+temp <- temp[complete.cases(temp),]
+```
+
+
+```{r}
+par(mfrow = c(1,2))
+plot(density(as.numeric(temp[, 3:5])), xlim = c(0, 270))
+plot(ecdf(as.numeric(temp[, 3:5])), xlim = c(0, 270))
+grid()
+```
+
+The mean deviation is __`r round(mean(abs(temp[, 3:5])), 3)`__%.
+
+
+
+# Pre-condition the problem
+
+We have seen that getting the desired trade-off is difficult for this problem. We will now attempt to _pre-condition_ the problem by roughly approximating the distributions of each objective's losses.
+
+While we have already high-precision approximations of the ECDFs for each objective, those shall only be used to more accurately test and obtain the score associated with a loss.
+
+
+```{r}
+set.seed(2002)
+constellations <- 1e4
+
+prec_weight_grid <- matrix(data = runif(n = constellations * 2, min = lower, max = upper), ncol = 2)
+```
+
+```{r}
+make_smooth_ecdf <- function(values, slope = 0.025) {
+  r <- range(values)
+  e <- stats::ecdf(values)
+  x <- sort(unique(values))
+  y <- e(x)
+  if (slope > 0) {
+    ext <- r[2] - r[1]
+    # Add a sllight slope before and after for numeric stability.
+    x <- c(r[1] - ext, x, r[2] + ext)
+    y <- c(0 - slope, y, 1 + slope)
+  }
+  stats::approxfun(x = x, y = y, yleft = y[1], yright = y[length(y)])
+}
+```
+
+
+```{r}
+ex2_f1_ecdf <- stats::ecdf(apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f1_scaled(row)))
+#ex2_f1_ecdf <- make_smooth_ecdf(apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f1_scaled(row)))
+ex2_f2_ecdf <- stats::ecdf(apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f2_scaled(row)))
+#ex2_f2_ecdf <- make_smooth_ecdf(apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f2_scaled(row)))
+ex2_f3_ecdf <- stats::ecdf(apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f3_scaled(row)))
+#ex2_f3_ecdf <- make_smooth_ecdf(apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f3_scaled(row)))
+
+ex2_f1_eccdf <- function(x) 1 - ex2_f1_ecdf(x)
+ex2_f2_eccdf <- function(x) 1 - ex2_f2_ecdf(x)
+ex2_f3_eccdf <- function(x) 1 - ex2_f3_ecdf(x)
+```
+
+```{r echo=FALSE}
+par(mfrow = c(1,3))
+
+#curve2(func = ex2_f1_eccdf, from = min(ex2_high_prec_ecdfs$ecdf_data$f1), to = max(ex2_high_prec_ecdfs$ecdf_data$f1))
+#curve2(func = ex2_f2_eccdf, from = min(ex2_high_prec_ecdfs$ecdf_data$f2), to = max(ex2_high_prec_ecdfs$ecdf_data$f2))
+#curve2(func = ex2_f3_eccdf, from = min(ex2_high_prec_ecdfs$ecdf_data$f3), to = max(ex2_high_prec_ecdfs$ecdf_data$f3))
+plot(ex2_f1_ecdf, xlim = range(ex2_high_prec_ecdfs$ecdf_data$f1))
+plot(ex2_f2_ecdf, xlim = range(ex2_high_prec_ecdfs$ecdf_data$f2))
+plot(ex2_f3_ecdf, xlim = range(ex2_high_prec_ecdfs$ecdf_data$f3))
+```
+
+The roughly approximated E(C)CDFs look quite similar to the high-precision ones.
+
+
+
+## Pareto front using scores
+
+Let's approximate the Pareto front. Again, we will use the augmented Chebyshev scalarizer, but this time we will maximize the scores.
+Since each score can maximally be $1$ (or each loss minimally be $0$), we will use these directly as utopian values.
+
+
+```{r}
+# A quick test. Note that we will do minimization and therefore use the ECDFs,
+# not the ECCDFs.
+
+set.seed(1)
+aug_chebyshev(objectives = list(
+  f1 = function(x) {
+    ex2_f1_ecdf(ex2_f1_scaled(x))
+  },
+  f2 = function(x) {
+    ex2_f2_ecdf(ex2_f2_scaled(x))
+  },
+  f3 = function(x) {
+    ex2_f3_ecdf(ex2_f3_scaled(x))
+  }
+), utop_vec = rep(-.1, 3), w_vec = runif(3), x = runif(2, lower, upper))
+```
+
+As for the front itself, we will reuse the weight constellations as used originally.
+That will also let us compare the fronts then.
+
+
+
+```{r echo=FALSE}
+ex2_pareto_front_scores <- loadResultsOrCompute(file = "../results/ex2_pareto_front_scores.rds", computeExpr = {
+  objectives <- list(
+    f1 = function(x) {
+      ex2_f1_ecdf(ex2_f1_scaled(x))
+    },
+    f2 = function(x) {
+      ex2_f2_ecdf(ex2_f2_scaled(x))
+    },
+    f3 = function(x) {
+      ex2_f3_ecdf(ex2_f3_scaled(x))
+    }
+  )
+  
+  cl <- parallel::makePSOCKcluster(15)
+  parallel::clusterExport(cl = cl, varlist = c(
+    "objectives",
+    "ex2_nadir", "ex2_ideal", "ex2_utop",
+    paste0("ex2_f", 1:3), paste0("ex2_f", 1:3, "_ecdf"), paste0("ex2_f", 1:3, "_scaled")))
+  
+  res <- as.data.frame(doWithParallelClusterExplicit(cl = cl, stopCl = TRUE, expr = {
+    library(foreach)
+    
+    foreach::foreach(
+      idx = 1:nrow(weight_grid),
+      .combine = rbind,
+      .inorder = FALSE
+    ) %dopar% {
+      w <- as.numeric(weight_grid[idx,])
+      set.seed(seed = idx)
+      
+      res <- nloptr::nloptr(
+        x0 = runif(n = 2, min = lower, max = upper),
+        opts = list(
+          maxeval = 2e3,
+          algorithm = "NLOPT_GN_DIRECT_L_RAND"),
+        eval_f = function(x) {
+          aug_chebyshev(objectives = objectives, utop_vec = c(0,0,0), w_vec = w, x = x, rho = .0001)
+        },
+        lb = rep(lower, 2),
+        ub = rep(upper, 2))
+      
+      `colnames<-`(
+        x = matrix(data = c(ex2_f1_scaled(res$solution), ex2_f2_scaled(res$solution), ex2_f3_scaled(res$solution),
+                            w, res$objective, res$solution), nrow = 1),
+        value = c("f1", "f2", "f3", "w1", "w2", "w3", "value", "x", "y"))
+    }
+  }))
+  
+  # Next, we have to identify the Pareto front, by selecting non-dominated solutions.
+  res$optimal <- FALSE
+  for (rn in rownames(res)) {
+    this_sol <- res[rn, c("f1", "f2", "f3")]
+    others <- res[rn != rownames(res), c("f1", "f2", "f3")]
+    res[rn, ]$optimal <- !any(others$f1 < this_sol$f1 & others$f2 < this_sol$f2 & others$f3 < this_sol$f3)
+  }
+  res
+})
+```
+
+Out of __`r nrow(ex2_pareto_front_scores)`__, a total of __`r sum(ex2_pareto_front_scores$optimal)`__ are Pareto optimal.
+
+```{r}
+rgl::plot3d(x = ex2_pareto_front_scores$f1, y = ex2_pareto_front_scores$f2, z = ex2_pareto_front_scores$f3)
+```
+
+
+```{r}
+ex2_trade_offs_scores <- as.data.frame(cbind(
+  ex2_pareto_front_scores[, c("w1", "w2", "w3")],
+  data.frame(
+    s1 = ex2_f1_high_prec_eccdf(ex2_pareto_front_scores$f1),
+    s2 = ex2_f2_high_prec_eccdf(ex2_pareto_front_scores$f2),
+    s3 = ex2_f3_high_prec_eccdf(ex2_pareto_front_scores$f3)
+  )
+))
+head(ex2_trade_offs_scores)
+```
+
+
+```{r}
+ex2_trade_offs_scores_diffs <- matrix(ncol = 5, nrow = nrow(ex2_trade_offs_scores))
+
+for (i in 1:nrow(ex2_trade_offs_scores)) {
+  v1 <- as.numeric(ex2_trade_offs_scores[i, c("w1", "w2", "w3")])
+  v2 <- as.numeric(ex2_trade_offs_scores[i, c("s1", "s2", "s3")])
+  # Normalize both:
+  v1 <- v1 / sum(v1)
+  v2 <- v2 / sum(v2)
+  
+  ex2_trade_offs_scores_diffs[i,] <- c(
+    Metrics::mae(actual = v2, predicted = v1),
+    Metrics::rmse(actual = v2, predicted = v1),
+    abs(100 * (1 - v1/v2))
+  )
+}
+```
+
+```{r}
+head(ex2_trade_offs_scores_diffs)
+```
+
+```{r}
+temp <- ex2_trade_offs_scores_diffs[,]
+temp[is.infinite(temp)] <- NA
+temp <- temp[complete.cases(temp),]
+```
+
+
+```{r}
+par(mfrow = c(1,2))
+plot(density(as.numeric(temp[, 3:5])), xlim = c(0, 270))
+plot(ecdf(as.numeric(temp[, 3:5])), xlim = c(0, 270))
+grid()
+```
+
+The mean deviation is __`r round(mean(abs(temp[, 3:5])), 3)`__%.
+
+
+## Reference point adjustment
+
+```{r}
+check_sol <- function(sol, objectives = list(ex2_f1_scaled, ex2_f2_scaled, ex2_f3_scaled)) {
+  objVals <- unlist(lapply(X = objectives, FUN = function(obj) obj(sol)))
+  v <- c(
+    ex2_f1_high_prec_eccdf(objVals[1]),
+    ex2_f2_high_prec_eccdf(objVals[2]),
+    ex2_f3_high_prec_eccdf(objVals[3])
+  )
+  v <- v / max(v)
+  v
+}
+```
+
+
+```{r}
+objectives <- list(ex2_f1_scaled, ex2_f2_scaled, ex2_f3_scaled)
+vec_w <- c(1,2,3)
+
+set.seed(1)
+res <- nloptr::nloptr(
+  x0 = runif(n = 2, min = lower, max = upper),
+  opts = list(
+    maxeval = 2e3,
+    algorithm = "NLOPT_GN_DIRECT_L_RAND"),
+  eval_f = function(x) {
+    objVals <- unlist(lapply(X = objectives, FUN = function(obj) obj(x)))
+    sum(vec_w * (objVals - ex2_utop_scaled)^2)
+  },
+  lb = rep(lower, 2),
+  ub = rep(upper, 2))
+```
+
+```{r}
+check_sol(res$solution)
+#unlist(lapply(X = objectives, FUN = function(obj) obj(res$solution))) - ex2_ideal_scaled
+```
+
+Let's map the weights to the reference points.
+For that, we need the inverse CDF:
+
+```{r}
+make_inverse_ecdf <- function(values) {
+  e <- ecdf(values)
+  y <- e(values)
+  stats::approxfun(x = y, y = values, yleft = min(values), yright = max(values))
+}
+```
+
+```{r}
+ex2_f1_ppf <- make_inverse_ecdf(apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f1_scaled(row)))
+ex2_f2_ppf <- make_inverse_ecdf(apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f2_scaled(row)))
+ex2_f3_ppf <- make_inverse_ecdf(apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f3_scaled(row)))
+```
+
+```{r}
+par(mfrow = c(1,3))
+
+curve2(ex2_f1_ppf, 0, 1)
+curve2(ex2_f2_ppf, 0, 1)
+curve2(ex2_f3_ppf, 0, 1)
+```
+
+
+```{r}
+(ex2_refpoint <- c(
+  ex2_f1_ppf(vec_w[1] / max(vec_w)),
+  ex2_f2_ppf(vec_w[2] / max(vec_w)),
+  ex2_f3_ppf(vec_w[3] / max(vec_w))
+))
+```
+
+Now let's use this as a reference point without weights:
+
+```{r}
+set.seed(1)
+res <- nloptr::nloptr(
+  x0 = runif(n = 2, min = lower, max = upper),
+  opts = list(
+    maxeval = 2e3,
+    algorithm = "NLOPT_GN_DIRECT_L_RAND"),
+  eval_f = function(x) {
+    objVals <- unlist(lapply(X = objectives, FUN = function(obj) obj(x)))
+    sum(abs((objVals - ex2_refpoint)^2))
+  },
+  lb = rep(lower, 2),
+  ub = rep(upper, 2))
+```
+
+```{r}
+unlist(lapply(X = objectives, FUN = function(obj) obj(res$solution)))
+```
 
 
 
 
+```{r}
+set.seed(6)
+#(vec_temp <- vec_w / (max(vec_w)))
+vec_temp <- runif(3)
+(vec_temp <- vec_temp / max(vec_temp))
+```
+
+
+```{r}
+(temp <- ex2_nadir_scaled - vec_temp * (ex2_nadir_scaled - ex2_ideal_scaled))
+```
+
+Now we have to pass this vector into the ECDFs to get the real weights!
+
+```{r}
+(vec_w_real <- c(
+  ex2_f1_eccdf(temp[1]),
+  ex2_f2_eccdf(temp[2]),
+  ex2_f3_eccdf(temp[3])
+))
+```
+
+
+```{r}
+set.seed(1)
+res <- nloptr::nloptr(
+  x0 = runif(n = 2, min = lower, max = upper),
+  opts = list(
+    maxeval = 2e3,
+    algorithm = "NLOPT_GN_DIRECT_L_RAND"),
+  eval_f = function(x) {
+    objVals <- unlist(lapply(X = objectives, FUN = function(obj) obj(x)))
+    sum(vec_w_real * (objVals - ex2_utop_scaled)^2)
+  },
+  lb = rep(lower, 2),
+  ub = rep(upper, 2))
+```
+
+```{r}
+check_sol(res$solution)
+#unlist(lapply(X = objectives, FUN = function(obj) obj(res$solution))) - ex2_ideal_scaled
+```
 
 
 
 
+\clearpage
 
+# References {-}
 
-
-
-
+<div id="refs"></div>
 
 
 
