@@ -17,6 +17,24 @@ doWithParallelCluster <- function(expr, errorValue = NULL, numCores = parallel::
   return(result)
 }
 
+doWithParallelClusterExplicit <- function(cl, expr, errorValue = NULL, stopCl = TRUE) {
+  doSNOW::registerDoSNOW(cl = cl)
+  mev <- missing(errorValue)
+  
+  tryCatch(expr, error = function(cond) {
+    if (!mev) {
+      return(errorValue)
+    }
+    return(cond)
+  }, finally = {
+    if (stopCl) {
+      parallel::stopCluster(cl)
+      foreach::registerDoSEQ()
+      gc()
+    }
+  })
+}
+
 loadResultsOrCompute <- function(file, computeExpr) {
   file <- base::normalizePath(file, mustWork = FALSE)
   if (file.exists(file)) {
