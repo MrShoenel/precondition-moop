@@ -48,6 +48,9 @@ header-includes:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv(LANG = "en_US.UTF-8")
+Sys.setenv(LC_ALL = "en_US.UTF-8")
+Sys.setenv(LC_CTYPE = "en_US.UTF-8")
 ```
 
 ```{r echo=FALSE}
@@ -570,12 +573,20 @@ Let's attempt the following: Instead of estimating the ECDF, we will fit a param
 In practice, one would perhaps be better off attempting to fit a wider range of potential distributions, then going with the best (using, e.g., the $D$-statistic of the KS-test).
 
 ```{r}
-ex1_f1_eccdf_norm <- function(x) {
-  1 - pnorm(q = x, mean = mean(ex1_f1_ecdf_vals), sd = sd(ex1_f1_ecdf_vals))
-}
-ex1_f2_eccdf_norm <- function(x) {
-  1 - pnorm(q = x, mean = mean(ex1_f2_ecdf_vals), sd = sd(ex1_f2_ecdf_vals))
-}
+ex1_f1_eccdf_norm <- (function() {
+  m <- mean(ex1_f1_ecdf_vals)
+  s <- sd(ex1_f1_ecdf_vals)
+  function(x) {
+    1 - pnorm(q = x, mean = m, sd = s)
+  }
+})()
+ex1_f2_eccdf_norm <- (function() {
+  m <- mean(ex1_f2_ecdf_vals)
+  s <- sd(ex1_f2_ecdf_vals)
+  function(x) {
+    1 - pnorm(q = x, mean = m, sd = s)
+  }
+})()
 ```
 
 
@@ -716,7 +727,7 @@ for (idx in 1:nrow(temp)) {
 Figure \ref{fig:ex1-working-tradeoffs} demonstrates how pre-conditioning allows us to converge to a desired trade-off between objectives.
 
 
-```{r ex1-working-tradeoffs, echo=FALSE, fig.cap="Working trade-offs using a pre-conditioned version of the first example problem."}
+```{r ex1-working-tradeoffs, echo=FALSE, fig.cap="Well-working trade-offs using a pre-conditioned version of the first example problem."}
 plot(x = c(), y = c(),
      xlab = latex2exp::TeX("$f_1(x)$"), ylab = latex2exp::TeX("$f_2(x)$"),
      main = "Convergence towards Pareto front using desired trade-off.",
@@ -884,6 +895,279 @@ do_opt(fn = function(x) {
 
 Now we can say with certainty that there are two equally absolute best solutions for this problem, where one favors the first objective (the second having no weight) and one favors the second objective.
 Using the seed of $1$ leads to weights $[1,0]$, and using a seed of $7$ leads to weights $[0,1]$. No matter the seed, one weight is always (practically) $0$, while the other is $>0$. In a weighted mean, it does not matter by how much the one weight is greater than zero, just that it is (as normalization of a zero-weight will not make it larger).
+
+
+
+### Using some best-fitting distribution
+
+Here we will try to fit the best possible 
+
+
+```{r warning=FALSE}
+library(ExtDist)
+
+# First objective:
+temp <- bestDist(X = ex1_f1_ecdf_vals, criterion = "BIC", candDist = c("Beta_ab", "Beta", "Normal", "Laplace", "JohnsonSU", "Gamma", "Exp", "Gumbel", "Logistic", "Weibull", "SRTB_ab", "Triangular"))
+ex1_f1_best_dist_par <- as.list(unlist(attributes(temp)$best.dist.par))
+ex1_f1_best_dist <- get(paste0("p", temp[1]))
+ex1_f1_eccdf_best <- function(x) {
+  ex1_f1_best_dist_par$params <- ex1_f1_best_dist_par
+  ex1_f1_best_dist_par$q <- x
+  1 - do.call(what = ex1_f1_best_dist, args = ex1_f1_best_dist_par)
+}
+temp[1]
+```
+
+```{r warning=FALSE}
+# Second objective:
+temp <- bestDist(X = ex1_f2_ecdf_vals, criterion = "BIC", candDist = c("Normal", "Laplace", "JohnsonSU", "Gamma", "Exp", "Gumbel", "Logistic", "Weibull", "SRTB_ab", "Triangular"))
+ex1_f2_best_dist_par <- as.list(unlist(attributes(temp)$best.dist.par))
+ex1_f2_best_dist <- get(paste0("p", temp[1]))
+ex1_f2_eccdf_best <- function(x) {
+  ex1_f2_best_dist_par$params <- ex1_f2_best_dist_par
+  ex1_f2_best_dist_par$q <- x
+  1 - do.call(what = ex1_f2_best_dist, args = ex1_f2_best_dist_par)
+}
+temp[1]
+```
+
+Let's compare:
+
+```{r}
+par(mfrow = c(1, 2))
+
+curve2(ex1_f1_eccdf_norm, min(ex1_f1_ecdf_vals) - 10, max(ex1_f1_ecdf_vals) + 10, ylab = latex2exp::TeX("${CCDF}_{f_1}(x)$"))
+grid()
+curve2(ex1_f1_eccdf_best, min(ex1_f1_ecdf_vals) - 10, max(ex1_f1_ecdf_vals) + 10, col = "red", add = TRUE)
+legend(x = -5, y = 0.15, lty = 1, col = c("black", "red"), legend = c("Normal CDF", "Beta_ab CDF"), cex = .8)
+
+curve2(ex1_f2_eccdf_norm, min(ex1_f2_ecdf_vals) - 10, max(ex1_f2_ecdf_vals) + 10, ylab = latex2exp::TeX("${CCDF}_{f_2}(x)$"))
+grid()
+curve2(ex1_f2_eccdf_best, min(ex1_f2_ecdf_vals) - 10, max(ex1_f2_ecdf_vals) + 10, col = "red", add = TRUE)
+```
+
+By visual inspection we can see that for the first objective, there is a slight difference. Let's zoom in at some points (fig \ref{fig:}).
+
+```{r bla, echo=FALSE, fig.height=7}
+par(mfrow = c(2, 2))
+
+
+curve2(ex1_f1_eccdf_norm, 0, 20, ylab = latex2exp::TeX("${CCDF}_{f_1}(x)$"))
+grid()
+curve2(ex1_f1_eccdf_best, 0, 20, col = "red", add = TRUE)
+
+curve2(ex1_f1_eccdf_norm, 10, 40, ylab = latex2exp::TeX("${CCDF}_{f_1}(x)$"))
+grid()
+curve2(ex1_f1_eccdf_best, 10, 40, col = "red", add = TRUE)
+
+curve2(ex1_f1_eccdf_norm, 55, 70, ylab = latex2exp::TeX("${CCDF}_{f_1}(x)$"))
+grid()
+curve2(ex1_f1_eccdf_best, 55, 70, col = "red", add = TRUE)
+
+curve2(ex1_f1_eccdf_norm, 75, 115, ylab = latex2exp::TeX("${CCDF}_{f_1}(x)$"))
+grid()
+curve2(ex1_f1_eccdf_best, 75, 115, col = "red", add = TRUE)
+
+```
+
+
+```{r}
+ks.test(ex1_f1_ecdf_vals, ex1_f1_eccdf_norm)$statistic < ks.test(ex1_f1_ecdf_vals, ex1_f1_eccdf_best)$statistic
+```
+
+
+Apparently, only the first objective has a somewhat different distribution (two-parameter Beta distribution), while the maximum likelihood for the second objective is a normal distribution as well (the exact same).
+
+```{r}
+ex1_scalarizer_ecdf_best <- function(x, w = c(1, 1)) {
+  s1 <- ex1_f1_eccdf_best(ex1_f1_prime(x))
+  s2 <- ex1_f2_eccdf_best(ex1_f2_prime(x))
+  -1 * (w[1] * s1 + w[2] * s2) # minimization
+}
+
+pracma::grad(f = function(x) {
+  ex1_scalarizer_ecdf_best(x = x)
+}, x0 = runif(n = i, min = lb, max = ub))
+```
+
+
+```{r}
+set.seed(1337)
+temp <- matrix(data = c(1,1, 1,2, 1,3, 1,5, 1,10, 2,1, 3,1, 5,1, 10,1, runif(10)), ncol = 2, byrow = TRUE)
+
+temp1 <- matrix(data = sapply(X = 1:nrow(temp), FUN = function(idx) {
+  res <- do_opt(fn = function(x) ex1_scalarizer_ecdf_best(x = x, w = temp[idx, ]))
+  c(res$objective / sum(temp[idx, ]), ex1_f1(res$solution), ex1_f2(res$solution))
+}), ncol = 3, byrow = TRUE)
+
+temp2 <- matrix(data = sapply(X = 1:nrow(temp), FUN = function(idx) {
+  # Return wanted vs. gotten trade-off
+  foo <- c(temp[idx, 1] / temp[idx, 2], temp1[idx, 3] / temp1[idx, 2])
+  c(foo, abs(foo[1] - foo[2]) / (temp[idx, 1] / temp[idx, 2]))
+}), ncol = 3, byrow = TRUE)
+
+temp3 <- `colnames<-`(
+  x = cbind(round(temp, 3), round(temp1, 5), round(temp2, 5)),
+  value = c("w1", "w2", "res", "loss_f1", "loss_f2", "TO_wanted", "TO_gotten", "TO_diff_perc"))
+temp3 <- temp3[order(-temp3[, "TO_wanted"]),]
+temp3
+```
+
+
+### EPDF to ECDF
+
+```{r}
+temp <- stats::density(x = ex1_f1_ecdf_vals, n = 2^15)
+x_first <- min(temp$x) - (max(temp$x) - min(temp$x)) / 2
+x_last <- max(temp$x) + (max(temp$x) - min(temp$x)) / 2
+
+tempf <-stats::approxfun(
+  x = c(x_first, temp$x, x_last),
+  y = c(0, temp$y, 0),
+  yleft = 0, yright = 0)
+
+curve2(func = tempf, from = -1, to = 10)
+tempf <- function(x) dnorm(x = x, mean = mean(ex1_f1_ecdf_vals), sd = sd(ex1_f1_ecdf_vals))
+curve2(tempf, x_first, x_last, col="red", add=TRUE)
+```
+
+
+
+```{r}
+ex1_f1_eccdf_epdf <- (function() {
+  temp <- stats::density(x = ex1_f1_ecdf_vals, n = 2^15)
+  x_first <- min(temp$x) - (max(temp$x) - min(temp$x)) / 2
+  x_last <- max(temp$x) + (max(temp$x) - min(temp$x)) / 2
+
+  tempf <-stats::approxfun(
+    x = c(x_first, temp$x, x_last),
+    y = c(0, temp$y, 0),
+    yleft = 0, yright = 0)
+  
+  Vectorize(function(x) {
+    1 - cubature::cubintegrate(f = tempf, lower = x_first, upper = x)$integral
+  })
+})()
+```
+
+```{r}
+curve2(func = ex1_f1_eccdf_epdf, from = x_first, to = x_last)
+curve2(func = ex1_f1_eccdf_norm, from = x_first, to = x_last, col="red", add=TRUE)
+```
+
+```{r}
+ex1_f2_eccdf_epdf <- (function() {
+  temp <- stats::density(x = ex1_f2_ecdf_vals, n = 2^15)
+  x_first <- min(temp$x) - (max(temp$x) - min(temp$x)) / 2
+  x_last <- max(temp$x) + (max(temp$x) - min(temp$x)) / 2
+
+  tempf <-stats::approxfun(
+    x = c(x_first, temp$x, x_last),
+    y = c(0, temp$y, 0),
+    yleft = 0, yright = 0)
+  
+  Vectorize(function(x) {
+    1 - cubature::cubintegrate(f = tempf, lower = x_first, upper = x)$integral
+  })
+})()
+```
+
+```{r}
+curve2(func = ex1_f2_eccdf_epdf, from = x_first, to = x_last)
+curve2(func = ex1_f2_eccdf_norm, from = x_first, to = x_last, col="red", add=TRUE)
+```
+
+
+
+
+
+```{r}
+ex1_scalarizer_ecdf_epdf <- function(x, w = c(1, 1)) {
+  s1 <- ex1_f1_eccdf_epdf(ex1_f1_prime(x))
+  s2 <- ex1_f2_eccdf_epdf(ex1_f2_prime(x))
+  -1 * (w[1] * s1 + w[2] * s2) # minimization
+}
+
+pracma::grad(f = function(x) {
+  ex1_scalarizer_ecdf_epdf(x = x)
+}, x0 = runif(n = i, min = lb, max = ub))
+```
+
+
+```{r}
+set.seed(1337)
+temp <- matrix(data = c(1,1, 1,2, 1,3, 1,5, 1,10, 2,1, 3,1, 5,1, 10,1, runif(10)), ncol = 2, byrow = TRUE)
+
+temp1 <- loadResultsOrCompute(file = "../results/ex1_eccdf_epdf.rds", computeExpr = {
+  matrix(data = sapply(X = 1:nrow(temp), FUN = function(idx) {
+    res <- do_opt(fn = function(x) ex1_scalarizer_ecdf_epdf(x = x, w = temp[idx, ]))
+    c(res$objective / sum(temp[idx, ]), ex1_f1(res$solution), ex1_f2(res$solution))
+  }), ncol = 3, byrow = TRUE)
+})
+
+temp2 <- matrix(data = sapply(X = 1:nrow(temp), FUN = function(idx) {
+  # Return wanted vs. gotten trade-off
+  foo <- c(temp[idx, 1] / temp[idx, 2], temp1[idx, 3] / temp1[idx, 2])
+  c(foo, abs(foo[1] - foo[2]) / (temp[idx, 1] / temp[idx, 2]))
+}), ncol = 3, byrow = TRUE)
+
+temp3 <- `colnames<-`(
+  x = cbind(round(temp, 3), round(temp1, 5), round(temp2, 5)),
+  value = c("w1", "w2", "res", "loss_f1", "loss_f2", "TO_wanted", "TO_gotten", "TO_diff_perc"))
+temp3 <- temp3[order(-temp3[, "TO_wanted"]),]
+temp3
+```
+
+```{r}
+mean(abs(temp3[, "TO_diff_perc"]))
+max(abs(temp3[, "TO_diff_perc"]))
+```
+
+
+
+
+## Problem 3
+
+We will formulate a problem similar to a problem that we have in the Czech project.
+There, we have an expectation formulated as a curve, but we know it is not ideal w.r.t. the actual observations we make. We want to adjust this curve such that it better matches the observations.
+If we think of the expectation as our _process model_ (PM), then we want to adjust this PM to better accommodate the observed _processes_.
+Here, we'll be using only one observation. In reality, we'd probably have a set of (weighted) observations.
+
+
+The degrees of freedom of this problem are: vertical translation, scaling, and a slope.
+We are attempting to optimize these objectives:
+
+* a
+* b
+
+We want to find an adjustment that is a _compromise_ of the following objectives.
+
+
+```{r ex3-pm-and-p}
+par(mfrow = c(2,1))
+
+ex3_pm <- function(x, w) {
+  # slope
+  a <- w[1]
+  # offset
+  b <- w[2]
+  
+  s_x <- w[3]
+  s_y <- w[4]
+  
+  #min(1, max(0, b + a*x + s_y * sin(x = s_x * x / pi)))
+  b + a*x + s_y * sin(x = s_x * x * pi)
+}
+```
+
+```{r}
+temp <- c(0, 0, 1.5, 1.5)
+curve2(func = Vectorize(function(x) {
+  ex3_pm(x, temp)
+}), 0, 1, ylim = c(0, 1))
+```
+
+
 
 
 
