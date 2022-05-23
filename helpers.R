@@ -1,3 +1,59 @@
+library(R6)
+
+StandardScaler <- R6::R6Class(
+  classname = "StandardScaler",
+  
+  private = list(
+    wasFit = NULL,
+    
+    requireFitted = function() {
+      if (!private$wasFit) {
+        stop("This scaler was not previously fit.")
+      }
+    }
+  ),
+  
+  public = list(
+    center = NULL, # mean
+    scale = NULL, # sd
+    
+    initialize = function() {
+      private$wasFit <- FALSE
+    },
+    
+    fit_transform = function(data) {
+      self$fit(data)$transform(data)
+    },
+    
+    fit = function(data) {
+      if (private$wasFit) {
+        stop("This scaler was not previously fit. Do not reuse scalers.")
+      }
+      
+      s <- scale(x = data, center = TRUE, scale = TRUE)
+      self$center <- attr(s, "scaled:center")
+      self$scale <- attr(s, "scaled:scale")
+      private$wasFit <- TRUE
+      invisible(self)
+    },
+    
+    transform = function(data) {
+      private$requireFitted()
+      
+      (data - self$center) / self$scale
+    },
+    
+    inverse_transform = function(data) {
+      private$requireFitted()
+      
+      scale(
+        scale(data, center = FALSE, scale = 1 / self$scale),
+        center = -1 * self$center, scale = FALSE)
+    }
+  )
+)
+
+
 doWithParallelCluster <- function(expr, errorValue = NULL, numCores = parallel::detectCores()) {
   cl <- parallel::makePSOCKcluster(numCores)
   doSNOW::registerDoSNOW(cl)
