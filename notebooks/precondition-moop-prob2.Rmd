@@ -443,6 +443,57 @@ The 3-dimensional Pareto front is shown in figure \ref{fig:ex2-pareto-front}.
 \end{figure}
 
 
+## Ordering the results
+
+The most important notion of what we are doing here, actually, is _orderability_ of the results. From that principle, we can derive a number of applications, such as correcting the weights a priori, or using the CDFs during minimization to get to some desired trade-off.
+The solutions in the Pareto optimal set are, from a mathematical point of view, equal. More precisely, they are equal in Pareto's sense, that none of the solutions is dominated, and none of the solutions can be further improved.
+
+
+However, using scores, we can add an _unsupervised_ way of introducing absolute order into the Pareto optimal set.
+Scores could further be weighted to modify this ranking (each set of weights will yield one type of order).
+
+
+Let's introduce an order:
+
+```{r}
+ex2_pareto_front_order <- matrix(ncol = 4, nrow = nrow(ex2_pareto_front_original))
+
+for (i in 1:nrow(ex2_pareto_front_order)) {
+  ex2_pareto_front_order[i,] <- c(
+    ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f1(ex2_pareto_front_original[i, 4]),
+    ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f2(ex2_pareto_front_original[i, 5]),
+    ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f3(ex2_pareto_front_original[i, 6]),
+    0)
+  ex2_pareto_front_order[i, 4] <- sum(ex2_pareto_front_order[i, 1:3])
+}
+```
+
+As we will show, not all solutions are equally good using an ordering scheme where all objectives are equally important:
+
+```{r}
+range(ex2_pareto_front_order[, 4])
+```
+
+
+```{r}
+plot(density(ex2_pareto_front_order[, 4]))
+```
+
+```{r}
+temp <- as.data.frame(cbind(
+  ex2_pareto_front_original,
+  `colnames<-`(ex2_pareto_front_order, c(paste0("s", 1:3), "s_total"))))
+temp$col <- "black"
+temp[temp$s_total > 1,]$col <- "blue"
+temp[which.max(temp$s_total),]$col <- "red"
+```
+
+
+```{r}
+rgl::plot3d(x = temp[, 4], y = temp[, 5], z = temp[, 6], col = temp$col)
+```
+
+
 
 # The high-precision ECDFs
 
@@ -472,11 +523,13 @@ ex2_high_prec_ecdfs <- loadResultsOrCompute(file = "../results/ex2_high_prec_ecd
       .combine = cbind,
       .export = c("ex2_ideal", "ex2_nadir", paste0("ex2_f", 1:3), paste0("ex2_f", 1:3, "_scaled"))
     ) %dopar% {
-      obj <- get(paste0("ex2_f", idx, "_scaled"))
-      temp <- apply(X = ex2_hp_samples, MARGIN = 1, FUN = function(row) obj(row))
+      obj <- get(paste0("ex2_f", idx))#, "_scaled"))
+      temp <- apply(X = ex2_hp_samples, MARGIN = 1, FUN = function(row) obj(row[1], row[2]))
       `colnames<-`(x = matrix(data = temp, ncol = 1), value = paste0("f", idx))
     }
   })
+  
+  ecdf_data
   
   ecdf_data <- as.data.frame(cbind(ex2_hp_samples, ecdf_data))
   colnames(ecdf_data) <- c("x", "y", "f1", "f2", "f3")
@@ -760,6 +813,216 @@ c(
 
 
 
+# ML example
+
+Let's try to establish a non-linear understanding between the desired and gotten trade-offs.
+We have already simulated the Pareto front, and we can use those results to carve out some training data.
+It is important, however, that we properly preprocess the data: The wanted trade-off needs to be normalized (i.e., the most important weight will always be equal to one), and the gotten trade-off needs also to be mapped into the score space before normalizing it.
+
+The goal of this approach is to obtain a model that a DM can use to transform their preference into the objective space.
+In this approach, we work with the original (i.e., non-scaled) problem. We also do not need ideal-, nadir-, or utopian-vectors.
+
+## Prepare the data
+
+```{r}
+temp <- ex2_pareto_front_original[, 4:6] # original objectives' values
+ex2_ml_x <- do.call(rbind, unlist(apply(X = temp, MARGIN = 1, FUN = function(row) {
+  row <- as.numeric(row)
+  res <- c(
+    ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f1(row[1]),
+    ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f2(row[2]),
+    ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f3(row[3]))
+  res <- res / max(res)
+  list(res)
+}), rec=FALSE))
+colnames(ex2_ml_x) <- paste0("s", 1:3)
+rownames(ex2_ml_x) <- NULL
+ex2_ml_x <- as.data.frame(ex2_ml_x)
+
+head(ex2_ml_x)
+```
+
+For $Y$, we only need to re-scale the weights.
+
+```{r}
+temp <- ex2_pareto_front_original[, 1:3] # The original preference
+ex2_ml_y <- do.call(rbind, unlist(apply(X = temp, MARGIN = 1, FUN = function(row) {
+  row <- as.numeric(row)
+  row <- row / max(row)
+  list(row)
+}), rec=FALSE))
+colnames(ex2_ml_y) <- paste0("w", 1:3)
+rownames(ex2_ml_y) <- NULL
+ex2_ml_y <- as.data.frame(ex2_ml_y)
+
+head(ex2_ml_y)
+```
+
+## Try ANN
+
+We have $50,000$ training examples. Let's take a few and learn an ANN.
+We will treat the desired and gotten trade-offs as probabilities and therefore use the cross entropy loss function.
+
+```{r}
+set.seed(1)
+temp <- sample(x = 1:nrow(ex2_ml_x), size = nrow(ex2_ml_x))
+idx_train <- temp[1:2500]
+idx_valid <- temp[2501:nrow(ex2_ml_x)]
+
+train_x <- ex2_ml_x[idx_train,]
+train_y <- ex2_ml_y[idx_train,]
+
+valid_x <- ex2_ml_x[idx_valid,]
+valid_y <- ex2_ml_y[idx_valid,]
+
+
+#scaler_X <- StandardScaler$new()
+#train_x_scaled <- scaler_X$fit_transform(train_x)
+#scaler_Y <- StandardScaler$new()
+#train_y_scaled <- scaler_Y$fit_transform(train_y)
+```
+
+
+```{r}
+library(neuralnet)
+set.seed(2)
+
+nnet <- neuralnet(
+  formula = w1 + w2 + w3 ~ ., data = cbind(train_x, train_y),
+  # Swish
+  #act.fct = function(x) x / (1 + exp(1)^(-x)),
+  # ~Softplus
+  #act.fct = function(x) log(1 + exp(x)),
+  # ~Relu
+  #act.fct =  function(x) x / (1 + exp(-10 * x)),
+  #act.fct = "tanh",
+  hidden = c(5),
+  lifesign = "full",
+  stepmax = 2e5,
+  threshold = 0.025#075
+)
+```
+
+```{r}
+plot(nnet)
+```
+
+
+```{r}
+pred <- predict(object = nnet, newdata = valid_x)
+pred <- do.call(rbind, unlist(apply(X = pred, MARGIN = 1, FUN = function(row) {
+  row <- as.numeric(row)
+  row <- row / max(row)
+  list(row)
+}), rec=FALSE))
+colnames(pred) <- paste0("pred_s", 1:3)
+rownames(pred) <- NULL
+pred <- as.data.frame(pred)
+
+head(pred)
+```
+
+```{r}
+head(valid_y)
+```
+
+
+```{r}
+ex2_tradeoff_metrics <- function(to_wanted, to_gotten) {
+  # Normalize both
+  v1 <- as.numeric(to_wanted / max(to_wanted))
+  v2 <- as.numeric(to_gotten / max(to_gotten))
+  stopifnot(length(v1) == length(v2))
+  
+  `colnames<-`(x = matrix(
+    nrow = 1,
+    data = c(
+      Metrics::mae(actual = v2, predicted = v1),
+      Metrics::rmse(actual = v2, predicted = v1),
+      abs(100 * (1 - v1/v2)))
+  ), value = c("MAE", "RMSE", paste0("PERC_DIFF_", 1:length(v1))))
+}
+```
+
+```{r}
+ex2_tradeoff_metrics_all <- function(to_wanted, to_gotten) {
+  m <- NULL
+  df <- NULL
+  for (i in 1:nrow(to_wanted)) {
+    temp <- ex2_tradeoff_metrics(to_wanted = to_wanted[i,], to_gotten = to_gotten[i,])
+    if (i == 1) {
+      m <- matrix(nrow = nrow(to_wanted), ncol = ncol(temp))
+      colnames(m) <- colnames(temp)
+    }
+    m[i,] <- temp
+  }
+  df <- as.data.frame(m)
+  df[df <= -Inf | df >= Inf] <- NA_real_
+  df
+}
+```
+
+```{r}
+diffs_org <- ex2_tradeoff_metrics_all(to_wanted = valid_y, to_gotten = valid_x)
+```
+
+```{r}
+diffs_corr <- ex2_tradeoff_metrics_all(to_wanted = valid_y, to_gotten = pred)
+```
+
+```{r}
+par(mfrow = c(2,2))
+xld <- range(c(density(diffs_org$MAE)$x, density(diffs_corr$MAE)$x))
+xl <- range(c(diffs_org$MAE, diffs_corr$MAE))
+
+plot(density(diffs_org$MAE), xlim = xld)
+grid()
+plot(ecdf(diffs_org$MAE), xlim = xl)
+grid()
+
+plot(density(diffs_corr$MAE), xlim = xld)
+grid()
+plot(ecdf(diffs_corr$MAE), xlim = xl)
+grid()
+```
+
+```{r}
+`rownames<-`(x = rbind(
+  quantile(x = diffs_org$MAE, probs = seq(0, 1, by=.1)),
+  quantile(x = diffs_corr$MAE, probs = seq(0, 1, by=.1))), value = c("org", "corr"))
+```
+
+
+```{r}
+plot(density(diffs_tf$MAE), xlim = xld)
+grid()
+plot(ecdf(diffs_tf$MAE), xlim = xl)
+grid()
+```
+
+
+
+
+```{r}
+ex2_ml_calc_error <- function(y_true, y_pred) {
+  nc <- ncol(y_true)
+  nr <- nrow(y_true)
+  s <- 0
+  for (i in 1:nrow(y_true)) {
+    s <- s + 1 / nc * sum((y_true[i,] - y_pred[i,])^2)
+  }
+  sqrt(s / nr) # RMSE
+}
+```
+
+
+Let's show the uncorrected error, and the error as predicted from the network:
+
+```{r}
+c(
+  "uncorr" = ex2_ml_calc_error(valid_y, valid_x),
+  "pred" = ex2_ml_calc_error(valid_y, pred))
+```
 
 
 
@@ -806,8 +1069,8 @@ for (i in 1:nrow(ex2_trade_offs_org)) {
   v1 <- as.numeric(ex2_trade_offs_org[i, c("w1", "w2", "w3")])
   v2 <- as.numeric(ex2_trade_offs_org[i, c("s1", "s2", "s3")])
   # Normalize both:
-  v1 <- v1 / sum(v1)
-  v2 <- v2 / sum(v2)
+  v1 <- v1 / max(v1)
+  v2 <- v2 / max(v2)
   
   ex2_trade_offs_org_diffs[i,] <- c(
     Metrics::mae(actual = v2, predicted = v1),
@@ -823,13 +1086,13 @@ head(ex2_trade_offs_org_diffs)
 ```{r}
 temp <- ex2_trade_offs_org_diffs[,]
 temp[is.infinite(temp)] <- NA
-temp <- temp[complete.cases(temp),]
+#temp <- temp[complete.cases(temp),]
 ```
 
 
 ```{r}
 par(mfrow = c(1,2))
-plot(density(as.numeric(temp[, 3:5])), xlim = c(0, 270))
+plot(density(as.numeric(temp[, 3:5]), na.rm = TRUE), xlim = c(0, 270))
 plot(ecdf(as.numeric(temp[, 3:5])), xlim = c(0, 270))
 grid()
 ```
@@ -1013,8 +1276,8 @@ for (i in 1:nrow(ex2_trade_offs_scores)) {
   v1 <- as.numeric(ex2_trade_offs_scores[i, c("w1", "w2", "w3")])
   v2 <- as.numeric(ex2_trade_offs_scores[i, c("s1", "s2", "s3")])
   # Normalize both:
-  v1 <- v1 / sum(v1)
-  v2 <- v2 / sum(v2)
+  v1 <- v1 / max(v1)
+  v2 <- v2 / max(v2)
   
   ex2_trade_offs_scores_diffs[i,] <- c(
     Metrics::mae(actual = v2, predicted = v1),
@@ -1037,7 +1300,7 @@ temp <- temp[complete.cases(temp),]
 
 ```{r}
 par(mfrow = c(1,2))
-plot(density(as.numeric(temp[, 3:5])), xlim = c(0, 270))
+plot(density(as.numeric(temp[, 3:5]), na.rm = TRUE), xlim = c(0, 270))
 plot(ecdf(as.numeric(temp[, 3:5])), xlim = c(0, 270))
 grid()
 ```
