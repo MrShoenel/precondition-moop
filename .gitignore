@@ -43,5 +43,6 @@ package/**/*.html
 
 notebooks/*.tex
 notebooks/*.pdf
+notebooks/*.log
 
 notebooks/**/figure-latex/*
