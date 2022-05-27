@@ -1,0 +1,1015 @@
+---
+title: "An Approach to Ordering Objectives and Pareto Efficient Solutions"
+#title: "Partial and total order of objectives in multi-objective optimization problems"
+subtitle: "A low- or no-preference demonstration using the Viennet function"
+author:
+  - "Sebastian Hönel"
+  - "Welf Löwe"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+bibliography: ../inst/REFERENCES.bib
+papersize: a4
+fontsize: 10pt
+geometry: "left=2cm,right=2cm,top=2.5cm,bottom=2.5cm"
+classoption:
+  - twocolumn
+urlcolor: blue
+link-citations: yes
+linkcolor: blue
+output:
+  bookdown::pdf_document2:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_depth: 6
+    df_print: kable
+    keep_tex: yes
+  md_document:
+    toc: yes
+    toc_depth: 6
+    df_print: kable
+    variant: gfm
+  html_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+    df_print: kable
+  word_document: default
+header-includes:
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{bm}
+- \usepackage{mathtools}
+- \usepackage{interval}
+- \usepackage{xurl}
+- \usepackage[nottoc]{tocbibind}
+- \usepackage{subfig}
+abstract: "Solutions to multi-objective optimization problems can generally not be compared or ordered, due to the lack of orderability of the single objectives. Furthermore, decision makers are often made to believe that scaled objectives can be compared. This is a fallacy, as the space of solutions is in practice inhomegeneous without linear trade-offs. We present a method that uses the probability integral transform in order to map the objectives of a problem into scores that all share the same range. In the score space, we can learn which trade-offs are actually possible and develop methods for mapping a desired trade-off back into the preference space. Our results demonstrate that Pareto efficient solutions can be ordered using a low- or no-preference aggregation of the single objectives. When using scores instead of raw objectives during optimization, it allows obtaining trade-offs significantly closer to the expressed preference. Using a non-linear mapping for transforming a desired solution in the score space to the required preference for optimization improves this even more drastically."
+---
+
+\intervalconfig{soft open fences}
+
+\newcommand*\mean[1]{\overline{#1}}
+\newcommand{\abs}[1]{\left\lvert\,#1\,\right\rvert}
+\newcommand{\norm}[1]{\left\lVert\,#1\,\right\rVert}
+\newcommand{\infdiv}[2]{#1\;\|\;#2}
+\newcommand\argmax[1]{\underset{#1}{arg\,max}}
+\newcommand\argmin[1]{\underset{#1}{arg\,min}}
+
+```{r echo=FALSE}
+# Set this to false to show R code
+PAPER_MODE <- TRUE
+```
+
+```{r echo=FALSE, warning=FALSE}
+source(file = "../helpers.R")
+source(file = "./common-funcs.R")
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = !PAPER_MODE)
+knitr::opts_chunk$set(eval = interactive())
+Sys.setenv(LANG = "en_US.UTF-8")
+Sys.setenv(LC_ALL = "en_US.UTF-8")
+Sys.setenv(LC_CTYPE = "en_US.UTF-8")
+```
+
+
+
+# Introduction
+
+Solving multi-objective optimization problems (MOOPs, \eqref{eq:moop}) are problems of two or more conflicting problems (or objectives).
+
+\begin{align}
+  \min_{\mathbf{x}\in\mathcal{D}}\,\left\{f_1(\mathbf{x}),\dots,f_k(\mathbf{x})\right\},\text{ where $k\geq2$.}\label{eq:moop}
+\end{align}
+
+The goal is to find some $\mathbf{x}^\star$ in the _decision space_ $\mathcal{D}$ that minimizes the loss across all single objectives simultaneously.
+Their solving may lead to a (possibly infinitely) large solution space $\mathcal{S}$.
+Each vector $\mathbf{s}_i$ in this space holds a solution for each of the optimized objectives.
+The set of Pareto _efficient_ solutions comprises those solutions that cannot be further improved.
+Because vectors in the Pareto efficient solution space cannot be ordered completely [@miettinen2008], they are traditionally regarded as equally desirable (in the mathematical sense, that is).
+A decision maker (DM) is then consulted to pick a preferred solution.
+Even worse, it may not be trivial to pick some most preferred solution, as the role of the chosen weights is misleading [@roy1996theoretical].
+The mathematical sense is, however, not congruent with interpreting objectives as scores. While in some cases objectives can be scaled into some uniform, dimensionless scale, the distribution of their associated losses remains unknown and __must__ be assumed to be non-uniform. In other words, not each attainable loss is equally likely, which drastically exacerbates the DMs situation of having to pick _and_ actually obtain the desired trade-off.
+
+
+We demonstrate an approach to approximating the order of Pareto efficient solutions, based on the marginal distributions of each objective.
+This approach transforms each objective into a score with standard uniform distribution, which allows comparing solution vectors.
+Used as either an a priori or a posteriori method, we can show that obtaining efficient solutions significantly closer to the desired trade-off is possible, using two distinct methods.
+The first method significantly improves precision by replacing the raw objectives with their scores during optimization.
+The second method improves the precision even more drastically, but requires the computation of some Pareto efficient solutions, in order to learn the non-linear mapping between preferences and solutions in the score space.
+None of the methods require the objectives to be scaled or having to know or approximate nadir-, ideal-, or utopian-vectors.
+Furthermore, by mapping objectives to scores, it allows a DM to gain insights into the density and homegenuity of the solution space, as well as to understand which trade-offs are actually possible.
+We use the Viennet function [@viennet1996] to empirically gather some results.
+
+
+
+# Transformation to scores
+
+Given some objective $f:\mathbb{R}^m\to\mathbb{R}$ that is subjected to minimization, we approximate its empirical distribution by uniformly drawing vectors $\mathbf{x}\in\mathbb{R}^m$ from the decision space $\mathcal{D}$.
+We therefore treat the outcome of each objective as a random variable that follows some distribution $\mathcal{X}\sim\bm{\beta}$, where the parameters $\bm{\beta}$ are unknown.
+Any random variable can be transformed into another random variable with standard uniform (or arbitrary other) distribution, using the _probability integral transform_.
+For our purposes, the standard uniform distribution suffices, as its range is $\interval{0}{1}$, which corresponds to what one would expect from a score.
+The cumulative distribution $\operatorname{CDF}$ of a random variable expresses the probability to find a value less than or equal to $x$.
+The results of the objective are ordered, and so is its corresponding $\operatorname{CDF}$. However, the meaning of loss and score is still reversed, in that a low loss corresponds to a low chance of observing it.
+We therefore define the score for $f$ as in \eqref{eq:score-for-f},
+
+\begin{align}
+  S_f:\mathbb{R}^m\mapsto\interval{0}{1}=1-\operatorname{CDF}_f(f(\mathbf{x}))\label{eq:score-for-f},
+\end{align}
+
+where the operation $\operatorname{CCDF}=1-\operatorname{CDF}$ is the _complementary_ $\operatorname{CDF}$.
+Now, a low loss of $f$ will yield a high score for $S_f$, and vice versa.
+Throughout this work we use empirical $\operatorname{CDF}$s approximated with high precision (using $10^6$ random decision vectors), in order to map from the loss- into the score-space. This is done to achieve high numerical precision in the context of this work.
+As we will show, in practice it suffices to draw considerably fewer samples (e.g., $10^3$) to obtain a sufficient approximation.
+
+
+
+## Ordering of solutions
+
+Orderability of Pareto efficient solutions is something that has eluded multi-objective optimization. In practice, the DM was only left with the mathematical equal desirability.
+Using $\operatorname{CCDF}$s, obtained solutions can be mapped into the score space $\mathcal{S}$. Using some final scheme that expresses the weight or importance of each score for some absolute best solution, the obtained scores for each solution can be aggregated, and the space be ordered according to that.
+The result of this may or may not be a unique solution.
+
+
+## Obtaining desired trade-offs
+
+While preference may be expressed, it is not necessarily adhered to, neither by the solution algorithm, nor by the problem itself.
+When specifying preference, a DM might obtain a solution close to that preference. However, that solution is in the objective space $\mathcal{O}$, __not__ in the score space $\mathcal{S}$.
+The latter is perhaps the only space workable for human DMs. This means that so far, expressing preference with non-uniformly distributed objectives has never led to the desired solution.
+
+
+In order to obtain a trade-off close to the desired trade-off, we identify two methods.
+In the first method, the solution algorithm would solve a version of the original problem, but based on the scores \eqref{eq:moop-scores}.
+Since we have a one-to-one association between preference and score, this method ought to converge towards the desired trade-off more accurately.
+This method usually requires a somewhat better empirical approximation of the marginal cumulative densities, or some well-fitting parametric probability distribution.
+In the former case, measures for introducing smoothness into the empirical $\operatorname{CDF}$s have to be taken as otherwise, the gradient of the problem will be zero, making this method only applicable in gradient-free scenarios.
+This method also enables the simple weighting method and the method of _weighted metrics_ (or compromise programming) [@zeleny1973compromise].
+The weighting methods require their objectives to have the same range, which we will get by using $\operatorname{CDF}$s.
+This is an important point, as by sufficiently approximating those, we do not have to approximate the nadir-, ideal-, or utopian-vectors, which are otherwise required for proper scaling.
+Especially the nadir-vector is difficult to obtain in practice [@miettinen2008], so not requiring precise approximations of any of those vectors means we can dispense with the associated effort, and may also be able to use previously incompatible solution algorithms.
+
+\begin{align}
+  \max_{\mathbf{x}\in\mathcal{D}}\,\left\{S_1(\mathbf{x}),\dots,S_k(\mathbf{x})\right\}.\label{eq:moop-scores}
+\end{align}
+
+
+In the second method, we attempt to "rectify" the preference as expressed by the DM. As we have previously established, there does not exist a linear relation between some preference and its solution in the score space.
+We can however approximate that non-linear relationship, too.
+By uniform randomly sampling from the _preference space_ $\mathcal{P}$, we first compute a sufficiently large subset of the Pareto optimal set in the score space.
+Typically, this set is considerably smaller than the full set \eqref{eq:pref-bijections}.
+These solutions are computed to establish a bijection $\mathcal{P}\to\mathcal{S}$ between the spaces for the desired- and obtained trade-off (i.e., which preference leads to which trade-off in the score space).
+Then, this relation is reversed and some model \eqref{eq:pref-nl-model} is fit that minimizes the deviation.
+
+\begin{align}
+  \mathcal{D}_k&=\left\{\left(\bm{\mathcal{P}}_i,\bm{\mathcal{S}}_i\right)\right\}_{i=1}^k\text{, dataset of bijections,}\label{eq:pref-bijections}
+  \\[1ex]
+  \mathsf{M}&=\min\,\sum_{j=i}^{k}\,(\mathbf{S}_i-\mathbf{P}_i)^2\text{, non-linear model.}\label{eq:pref-nl-model}
+\end{align}
+
+This can be done as we now have a one-to-one correspondence between preferences and solutions in the score space.
+The DM is now enabled to express their preference, and the learned model corrects this preference in order to converge to an efficient solution close to the desired trade-off.
+
+
+
+# The Viennet function
+
+The Viennet function consists of three objectives, each of which takes the same two parameters $\mathbf{x}=\{x_1,x_2\}$.
+It is defined as in \eqref{eq:viennet} [@viennet1996].
+The box bounds for the decision space $\mathcal{D}$ for this problem are sometimes limited to $-3\leq x_1,x_2\leq3$, but there is no practical difference using the slightly larger bounds as we do.
+
+\begin{align}
+  \min_{\mathbf{x}\in\mathbb{R}^2}\,&\begin{cases}
+    f_1(\mathbf{x})&=0.5\left(x_1^2+x_2^2\right) + \sin{\left(x_1^2+x_2^2\right)},
+    \\[1em]
+    f_2(\mathbf{x})&=\frac{(3x_1-2x_2+4)^2}{8}+\frac{(x_1-x_2+1)^2}{27}+15,
+    \\[1ex]
+    f_3(\mathbf{x})&=\frac{1}{x_1^2+x_2^2+1}-1.1\exp{\left(-x_1^2-x_2^2\right)},
+  \end{cases}\label{eq:viennet}
+  \\[1ex]
+  &\text{subject to }-4\leq x_1,x_2\leq4\nonumber.
+\end{align}
+
+
+Figure \ref{fig:ex2-pareto-front} shows the Pareto front of the efficient set. In order to obtain the front, we compute $50,000$ solutions by drawing preference constellations uniform randomly from the preference space $\mathcal{P}$.
+It is obvious that the three objectives do not share a common domain.
+The starting point for each optimization is chosen deterministic randomly, within the box bounds of the decision space $\mathcal{D}$.
+As solution algorithm we use the derivative-free global optimization called "DIRECT-L".
+It is based on a systematic subdivision of the search domain into increasingly smaller becoming hyperrectangles [@gablonskyK2001].
+The scalarizer used is the simple weighting method. While it has deficiencies, it can find Pareto efficient solutions if all weights are $>0$. The weighting method requires all objectives to share some common uniform dimensionless scale, which is fulfilled when using scores instead of raw objectives.
+With the global optimization we ascertain that the method will work even if this situation is not given.
+
+
+```{r eval=TRUE}
+lower <- -4
+upper <- 4
+
+ex2_f1 <- function(x, y) {
+  .5 * (x^2 + y^2) + sin(x^2 + y^2)
+}
+ex2_f2 <- function(x, y) {
+  1/8 * (3*x - 2*y + 4)^2 + 1/27 * (x - y + 1)^2 + 15
+}
+ex2_f3 <- function(x, y) {
+  1 / (x^2 + y^2 + 1) - 1.1 * exp(-x^2 -y^2)
+}
+```
+
+
+
+## High-precision $\operatorname{ECDF}$s
+
+In order to check the validity and precision of the results obtained in this work, we obtain $10^6$ samples from each objective using random decision vectors.
+These are shown in figure \ref{fig:ex2-high-prec}.
+Clearly, all of the distributions are non-uniform and different from each other.
+
+
+```{r}
+set.seed(1337)
+ex2_hp_samples <- matrix(ncol = 2, data = runif(n = 2e6, min = lower, max = upper))
+nrow(ex2_hp_samples)
+```
+
+```{r eval=TRUE}
+ex2_high_prec_ecdfs <- loadResultsOrCompute(file = "../results/ex2_high_prec_ecdfs.rds", computeExpr = {
+  ecdf_data <- doWithParallelCluster(numCores = 3, expr = {
+    library(foreach)
+    
+    foreach::foreach(
+      idx = 1:3,
+      .inorder = TRUE,
+      .combine = cbind,
+      .export = c("ex2_ideal", "ex2_nadir", paste0("ex2_f", 1:3), paste0("ex2_f", 1:3, "_scaled"))
+    ) %dopar% {
+      obj <- get(paste0("ex2_f", idx))
+      temp <- apply(X = ex2_hp_samples, MARGIN = 1, FUN = function(row) obj(row[1], row[2]))
+      `colnames<-`(x = matrix(data = temp, ncol = 1), value = paste0("f", idx))
+    }
+  })
+  
+  ecdf_data
+  
+  ecdf_data <- as.data.frame(cbind(ex2_hp_samples, ecdf_data))
+  colnames(ecdf_data) <- c("x", "y", "f1", "f2", "f3")
+  
+  # Let's also approximate the ECDFs and return them:
+  ecdf_funcs <- unlist(doWithParallelCluster(numCores = 3, expr = {
+    library(foreach)
+    
+    foreach::foreach(
+      idx = 1:3,
+      .inorder = TRUE,
+      .combine = list
+    ) %dopar% {
+      templ <- list()
+      templ[[paste0("ecdf_f", idx)]] <- stats::ecdf(ecdf_data[, paste0("f", idx)])
+      templ
+    }
+  }))
+  
+  list(
+    ecdf_data = ecdf_data,
+    ecdf_funcs = ecdf_funcs
+  )
+})
+```
+
+```{r ex2-high-prec, eval=TRUE, echo=FALSE, fig.cap="The empirical densities and cumulative distributions of the three objectives of the Viennet function.", fig.height=7, fig.show='hold', fig.align='center', out.width='90%'}
+layout(mat = matrix(data = c(1,2,3,4,5,6), ncol = 2, byrow = TRUE))
+par(mar=c(5,4,1.5,1), oma = rep(0, 4))
+
+for (i in 1:3) {
+  plot(density(ex2_high_prec_ecdfs$ecdf_data[, paste0("f", i)]), main = latex2exp::TeX(paste0("Kernel density of $f_", i, "(x)$")))
+  grid()
+  
+  # Let's first approximate the ECDFs with lower resolution for plotting.
+  ext <- range(ex2_high_prec_ecdfs$ecdf_data[, paste0("f", i)])
+  x <- seq(from = ext[1], to = ext[2], length.out = 1e3)
+  tempf <- stats::approxfun(x = x, y = ex2_high_prec_ecdfs$ecdf_funcs[[paste0("ecdf_f", i)]](x), yleft = 0, yright = 1)
+  curve2(func = tempf, from = ext[1], to = ext[2], ylab = latex2exp::TeX("F(x)"), main = latex2exp::TeX(paste0("Cumulative probability of $f_", i, "(x)$")))
+  grid()
+}
+```
+
+## Trade-offs
+
+Similar to the high-precision $\operatorname{ECDF}$s, a priori knowledge about possible trade-offs does usually not exist, except for when the Pareto efficient set has been computed.
+Requesting an _infeasible_ preference will still lead to an efficient solution, but perhaps not the desired one, either because it does not exist or it cannot be found. This implies that there is some non-linear mapping between the set of infeasible preferences and associated trade-offs.
+Ergo, we can split the preference space $\mathcal{P}$ into the sets of feasible and infeasible trade-offs, denoted by $\mathcal{P}^\star$ and $\mathcal{P}^\dagger$, respectively.
+If there was access to $\mathcal{P}^\star$, one could learn about whether some preference $\mathbf{p}^\star$ leads to the desired trade-off decision vector $\mathbf{s}$ in the score space. For example, the relationship might be linear.
+
+
+# Results
+
+In this section, we demonstrate some of the empirical findings.
+
+## Ordering the solutions
+
+In order to introduce order into the set of previously computed Pareto efficient solutions, we first map each solution into the score space and then simply sum up its scores in an unweighted manner, making no additional assumptions about which objective is the most important.
+
+```{r eval=TRUE}
+set.seed(1001)
+constellations <- 5e4
+
+weight_grid <- data.frame(
+  w1 = runif(n = constellations),
+  w2 = runif(n = constellations),
+  w3 = runif(n = constellations))
+
+ex2_pareto_front_original <- loadResultsOrCompute(file = "../results/ex2_pareto_front_original.rds", computeExpr = {
+  doWithParallelCluster(numCores = 15, expr = {
+    library(foreach)
+    
+    foreach::foreach(
+      idx = 1:nrow(weight_grid),
+      .inorder = FALSE,
+      .combine = rbind
+    ) %dopar% {
+      set.seed(idx)
+      w <- as.numeric(weight_grid[idx,])
+      
+      res <- nloptr::nloptr(
+        x0 = runif(2, min = -4, max = 4),
+        opts = list(
+          maxeval = 2e4,
+          algorithm = "NLOPT_GN_DIRECT_L_RAND"),
+        eval_f = function(x) {
+          w[1] * ex2_f1(x[1], x[2]) + w[2] * ex2_f2(x[1], x[2]) + w[3] * ex2_f3(x[1], x[2])
+        },
+        lb = c(-4, -4),
+        ub = c(4, 4))
+      
+      s <- res$solution
+      c(w, ex2_f1(s[1], s[2]), ex2_f2(s[1], s[2]), ex2_f3(s[1], s[2]), res$objective)
+    }
+  })
+})
+```
+
+```{r eval=TRUE}
+# Let's introduce an order:
+ex2_pareto_front_order <- matrix(ncol = 4, nrow = nrow(ex2_pareto_front_original))
+
+for (i in 1:nrow(ex2_pareto_front_order)) {
+  ex2_pareto_front_order[i,] <- c(
+    1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f1(ex2_pareto_front_original[i, 4]),
+    1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f2(ex2_pareto_front_original[i, 5]),
+    1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f3(ex2_pareto_front_original[i, 6]),
+    0)
+  ex2_pareto_front_order[i, 4] <- sum(ex2_pareto_front_order[i, 1:3])
+}
+```
+
+```{r ex2-pareto-front, eval=TRUE, fig.cap="The 3-dimensional Pareto front of the Viennet function's objectives, in the respective objective spaces. The color corresponds to the sum of scores in the score space.", fig.align='center', out.width='90%'}
+par(mar = c(2,2,2,2), oma=c(0,0,0,0))
+
+temp <- as.data.frame(cbind(
+  ex2_pareto_front_original,
+  `colnames<-`(ex2_pareto_front_order, c(paste0("s", 1:3), "s_total"))))
+
+plot3D::scatter3D(x = temp$V4, y = temp$V5, z = temp$V6, colvar = temp$s_total, col = viridis::viridis(100), phi = 10, theta = 20, r = 2, ticktype = "detailed", nticks = 5, pch = 16, cex.p = 0.5, clab = "Score", colkey = list("dist" = -0.1, "length" = .66, "width" = .66, "cex.clab" = 0.8), xlab = "Objective 1", ylab = "Objective 2", zlab = "Objective 3", bty = "b2")
+
+p <- temp[which.max(temp$s_total),]
+plot3D::points3D(x = p$V4, y = p$V5, z = p$V6, pch = 16, col = "red", cex.p=1, add = TRUE)
+plot3D::points3D(x = p$V4, y = p$V5, z = p$V6, pch = 0, col = "red", cex.p=2, add = TRUE)
+p <- temp[which.min(temp$s_total),]
+plot3D::points3D(x = p$V4, y = p$V5, z = p$V6, pch = 0, col = "purple", cex.p=1.5, add = TRUE)
+```
+
+```{r eval=FALSE}
+# No we can show some statistics about the distribution of the total scores
+range(temp$s_total)
+```
+
+
+The total scores for each of the solutions are in the interval $\interval{{\approx}1.848}{{\approx}2.856}$.
+This means that any solution with arbitrary combination of scores less than ${\approx}1.848$ is not Pareto efficient.
+There is a unique best solution for this problem with objective values of $\left\{f_1\approx0.9231,f_2\approx15.1532,f_3\approx0.0307\right\}$, marked by a red square in figure \ref{fig:ex2-pareto-front}. The solution marked by the purple square is the worst in the Pareto efficient set.
+A lighter color in this figure indicates a higher total score.
+The distribution of the total scores is then shown in figure \ref{fig:dens-total-scores}.
+In our case, the space containing the highest-scoring solutions is continuous and contiguous, i.e., the Pareto efficient solutions are to be found in a single area, and there is no area disjoint from that which has high scores, too.
+
+
+
+```{r dens-total-scores, eval=TRUE, fig.height=4, fig.cap="The density of the total scores.", fig.align='center', out.width='90%'}
+plot(density(temp$s_total), main = "Density of the total scores.")
+grid()
+```
+
+
+## Obtaining desired trade-offs
+
+Obtaining a Pareto efficient solution close to the desired trade-off can be done in multiple ways, all of which require to map the solutions into the score space $\mathcal{S}$.
+
+### A priori correction of weights
+
+In the first method, we attempt to correct the DMs preference such that it will result in the desired trade-off.
+This method requires us to learn a non-linear mapping between the gotten and desired trade-off ($\mathcal{S}\to\mathcal{P}$).
+This means that some DM expresses their preference in the solution space, which feels more natural. The complexity of choosing appropriate weights for the desired solution is then delegated to this method.
+This method does not require to have a notion of whether some expressed preference is feasible. If, however, there is knowledge about $\mathcal{P}^\star$ or $\mathcal{P}^\dagger$, and the mapping $\mathcal{P}^\star\to\mathcal{S}$ is known to be linear, then those preference/solution tuples can be excluded from training.
+In order to obtain training data for a model, we require a random subset of the Pareto efficient solutions to learn from.
+From the previously approximated Pareto front that holds $50,000$ efficient solutions, we take now $2,500$ for this task. The remaining $47,500$ pairs are held out as validation data and are not in any way part of the training.
+To simplify the data, we normalize each solution- and preference-vector such that the most preferred objective has a weight of $1$.
+We attempt to learn an artificial neural network [@rpgk_neuralnet]. It is shown in figure \ref{fig:ex2-nnet}.
+Since the problem is relatively small, we settle for a single hidden layer with five units. The Sigmoid function is used as activation function.
+From that figure we see that the preference is now actually specified in the solution space $\mathcal{S}$, and that the network will predict the associated preference in the preference space, $\mathcal{P}$.
+
+
+```{r}
+temp <- ex2_pareto_front_original[, 4:6] # original objectives' values
+ex2_ml_x <- do.call(rbind, unlist(apply(X = temp, MARGIN = 1, FUN = function(row) {
+  row <- as.numeric(row)
+  res <- c(
+    ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f1(row[1]),
+    ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f2(row[2]),
+    ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f3(row[3]))
+  res <- res / max(res)
+  list(res)
+}), rec=FALSE))
+colnames(ex2_ml_x) <- paste0("s", 1:3)
+rownames(ex2_ml_x) <- NULL
+ex2_ml_x <- as.data.frame(ex2_ml_x)
+
+if (interactive()) {
+  head(ex2_ml_x)
+}
+```
+
+```{r}
+# For Y, we only need to re-scale the weights.
+temp <- ex2_pareto_front_original[, 1:3] # The original preference
+ex2_ml_y <- do.call(rbind, unlist(apply(X = temp, MARGIN = 1, FUN = function(row) {
+  row <- as.numeric(row)
+  row <- row / max(row)
+  list(row)
+}), rec=FALSE))
+colnames(ex2_ml_y) <- paste0("w", 1:3)
+rownames(ex2_ml_y) <- NULL
+ex2_ml_y <- as.data.frame(ex2_ml_y)
+
+if (interactive()) {
+  head(ex2_ml_y)
+}
+```
+
+```{r eval=TRUE}
+nnet <- loadResultsOrCompute(file = "../results/ex2_nnet.rds", computeExpr = {
+  library(neuralnet)
+
+  set.seed(1)
+  temp <- sample(x = 1:nrow(ex2_ml_x), size = nrow(ex2_ml_x))
+  idx_train <- temp[1:2500]
+  idx_valid <- temp[2501:nrow(ex2_ml_x)]
+  
+  train_x <- ex2_ml_x[idx_train,]
+  train_y <- ex2_ml_y[idx_train,]
+  
+  valid_x <- ex2_ml_x[idx_valid,]
+  valid_y <- ex2_ml_y[idx_valid,]
+  
+  set.seed(2)
+  neuralnet(
+    formula = w1 + w2 + w3 ~ ., data = cbind(train_x, train_y),
+    # Swish
+    #act.fct = function(x) x / (1 + exp(1)^(-x)),
+    # ~Softplus
+    #act.fct = function(x) log(1 + exp(x)),
+    # ~Relu
+    #act.fct =  function(x) x / (1 + exp(-10 * x)),
+    #act.fct = "tanh",
+    hidden = c(5),
+    lifesign = "full",
+    stepmax = 2e5,
+    threshold = 0.025)
+})
+```
+
+```{r ex2-nnet, eval=TRUE, fig.height=6, fig.cap="The neural network for correcting preference."}
+plot(nnet, rep = "best")
+```
+
+```{r}
+# Let's make some predictions
+pred <- predict(object = nnet, newdata = valid_x)
+pred <- do.call(rbind, unlist(apply(X = pred, MARGIN = 1, FUN = function(row) {
+  row <- as.numeric(row)
+  row <- row / max(row)
+  list(row)
+}), rec=FALSE))
+colnames(pred) <- paste0("pred_s", 1:3)
+rownames(pred) <- NULL
+pred <- as.data.frame(pred)
+
+if (interactive()) {
+  head(pred)
+}
+```
+
+```{r eval=TRUE}
+diffs_org <- loadResultsOrCompute(file = "../results/ex2_diffs_org.rds", computeExpr = {
+  ex2_tradeoff_metrics_all(to_wanted = valid_y, to_gotten = valid_x)
+})
+```
+
+```{r}
+diffs_corr <- ex2_tradeoff_metrics_all(to_wanted = tradeoffs_org[, paste0("w", 1:3)], to_gotten = pred)
+```
+
+```{r eval=TRUE}
+diffs_corr <- loadResultsOrCompute(file = "../results/ex2_diffs_corr.rds", computeExpr = {
+  ex2_tradeoff_metrics_all(to_wanted = valid_y, to_gotten = pred)
+})
+```
+
+```{r ex2-tradeoffs-org-vs-corr, eval=FALSE, fig.cap="The mean absolute error of the original and corrected trade-offs.", fig.height=7, fig.align='center', out.width='90%'}
+par(mfrow = c(2,2), mar = c(5,3,2,0))
+xld <- range(c(density(diffs_org$MAE)$x, density(diffs_corr$MAE)$x))
+xl <- range(c(diffs_org$MAE, diffs_corr$MAE))
+
+plot(density(diffs_org$MAE), xlim = xld, main = "Density MAE original trade-offs.")
+grid()
+plot(ecdf(diffs_org$MAE), xlim = xl, main = "ECDF MAE original trade-offs.")
+grid()
+
+plot(density(diffs_corr$MAE), xlim = xld, main = "Density MAE corrected trade-offs.")
+grid()
+plot(ecdf(diffs_corr$MAE), xlim = xl, main = "Density MAE corrected trade-offs.")
+grid()
+```
+
+
+Figure \ref{fig:ex2-tradeoffs-org-vs-corr-online} shows a significant improvement of the obtained trade-offs using a corrected preference.
+We also generate some quantiles (see table \ref{tab:ex2-pref-corr-quant}).
+While still not perfect, $50$% of all trade-offs show a mean absolute error of $\approx0.129$.
+We also obtain much less extreme deviations, and no deviation is larger than $\approx0.679$.
+
+
+
+
+### Online correction
+
+The method of correcting preference seems promising.
+However, we also want to examine the approach of using scores instead of raw objectives during optimization.
+If we examine the empirical densities of figure \ref{fig:ex2-high-prec}, it does not appear that we can fit parametric distributions with promising results.
+We therefore approximate empirical $\operatorname{CDF}$s using $2,500$ random decision vectors for each objective. While the $\operatorname{ECDF}$ is a step function, we introduce numerical stability and strict monotonicity by first replacing the step-wise function with a piece-wise linear function. Then, we add slight slopes to the begin and end of each function, to account for extreme values not observed so far. This is conceptually similar to how the utopian vector is created: $\bm{z}^{\star\star}=\bm{z}^{\star}-\epsilon$.
+```{r}
+#The resulting $\operatorname{ECCDF}$s are shown in figure \ref{fig:ex2-eccdfs}.
+```
+
+
+```{r eval=TRUE}
+set.seed(2002)
+constellations <- 2500
+
+prec_weight_grid <- matrix(data = runif(n = constellations * 2, min = lower, max = upper), ncol = 2)
+```
+
+```{r eval=TRUE}
+ex2_f1_ecdf <- make_smooth_ecdf(
+  values = apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f1(row[1], row[2])))
+ex2_f2_ecdf <- make_smooth_ecdf(
+  values =apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f2(row[1], row[2])))
+ex2_f3_ecdf <- make_smooth_ecdf(
+  values = apply(X = prec_weight_grid, MARGIN = 1, FUN = function(row) ex2_f3(row[1], row[2])))
+
+ex2_f1_eccdf <- function(x) 1 - ex2_f1_ecdf(x)
+ex2_f2_eccdf <- function(x) 1 - ex2_f2_ecdf(x)
+ex2_f3_eccdf <- function(x) 1 - ex2_f3_ecdf(x)
+```
+
+```{r ex2-eccdfs, eval=FALSE, fig.height=8, fig.cap="The ECCDFs of the three objectives, using a piece-wise linear approximation and slopes."}
+par(mfrow = c(3,1), mar=c(5,4,1.5,1), oma = rep(0, 4))
+
+curve2(ex2_f1_eccdf, attributes(ex2_f1_ecdf)$slope_min, attributes(ex2_f1_ecdf)$slope_max, ylab = latex2exp::TeX("$F_1(x)$"))
+grid()
+abline(v = attributes(ex2_f1_ecdf)$range)
+
+
+curve2(ex2_f2_eccdf, attributes(ex2_f2_ecdf)$slope_min, attributes(ex2_f2_ecdf)$slope_max, ylab = latex2exp::TeX("$F_2(x)$"))
+grid()
+abline(v = attributes(ex2_f2_ecdf)$range)
+
+
+curve2(ex2_f3_eccdf, attributes(ex2_f3_ecdf)$slope_min, attributes(ex2_f3_ecdf)$slope_max, ylab = latex2exp::TeX("$F_3(x)$"))
+grid()
+abline(v = attributes(ex2_f3_ecdf)$range)
+```
+
+```{r eval=TRUE}
+ex2_pareto_front_scores <- loadResultsOrCompute(file = "../results/ex2_pareto_front_scores.rds", computeExpr = {
+  
+  res <- as.data.frame(doWithParallelCluster(numCores = 15, expr = {
+    library(foreach)
+    
+    foreach::foreach(
+      idx = 1:nrow(weight_grid),
+      .combine = rbind,
+      .inorder = FALSE
+    ) %dopar% {
+      w <- as.numeric(weight_grid[idx,])
+      set.seed(seed = idx)
+      
+      res <- nloptr::nloptr(
+        x0 = runif(n = 2, min = lower, max = upper),
+        opts = list(
+          maxeval = 5e3,
+          algorithm = "NLOPT_GN_DIRECT_L_RAND"),
+        eval_f = function(x) {
+          # Minimize loss = ecdf(x)
+          sum(w * c(
+            ex2_f1_ecdf(ex2_f1(x[1], x[2])),
+            ex2_f2_ecdf(ex2_f2(x[1], x[2])),
+            ex2_f3_ecdf(ex2_f3(x[1], x[2]))
+          ))
+        },
+        lb = rep(lower, 2),
+        ub = rep(upper, 2))
+      
+      s <- res$solution
+      `colnames<-`(
+        x = matrix(data = c(ex2_f1(s[1], s[2]), ex2_f2(s[1], s[2]), ex2_f3(s[1], s[2]),
+                            ex2_f1_eccdf(ex2_f1(s[1], s[2])),
+                            ex2_f2_eccdf(ex2_f2(s[1], s[2])),
+                            ex2_f3_eccdf(ex2_f3(s[1], s[2])),
+                            w, res$objective, s), nrow = 1),
+        value = c("f1", "f2", "f3", "s1", "s2", "s3", "w1", "w2", "w3", "value", "x", "y"))
+    }
+  }))
+  
+  res$s_total <- sapply(X = 1:nrow(res), FUN = function(i) {
+    sum(res[i, paste0("s", 1:3)])
+  })
+  
+  # Next, we have to identify the Pareto front, by selecting non-dominated solutions.
+  res$optimal <- doWithParallelCluster(numCores = 15, expr = {
+    library(foreach)
+    
+    foreach::foreach(
+      rn = rownames(res),
+      .combine = c,
+      .inorder = TRUE
+    ) %dopar% {
+      this_sol <- res[rn, c("f1", "f2", "f3")]
+      others <- res[rn != rownames(res), c("f1", "f2", "f3")]
+      !any(others$f1 < this_sol$f1 & others$f2 < this_sol$f2 & others$f3 < this_sol$f3)
+    }
+  })
+  
+  res
+})
+```
+
+```{r eval=TRUE}
+diffs_online <- loadResultsOrCompute(file = "../results/ex2_diffs_online.rds", computeExpr = {
+  ex2_tradeoff_metrics_all(
+    to_wanted = ex2_pareto_front_scores[rownames(valid_y), paste0("w", 1:3)],
+    to_gotten = ex2_pareto_front_scores[rownames(valid_y), paste0("s", 1:3)])
+})
+```
+
+```{r eval=TRUE}
+temp <- `rownames<-`(x = rbind(
+  paste0(seq(0, 100, by=10), "%"),
+  round(quantile(x = diffs_org$MAE, probs = seq(0, 1, by=.1)), 5),
+  round(quantile(x = diffs_corr$MAE, probs = seq(0, 1, by=.1)), 5),
+  round(quantile(x = diffs_online$MAE, probs = seq(0, 1, by=.1)), 5)), value = c("Quantile", "org", "corr", "online"))
+
+if (interactive()) {
+  temp
+} else {
+  knitr::kable(
+    x = t(temp),
+    booktabs = TRUE,
+    row.names = FALSE,
+    caption = "Quantiles of trade-off errors for the original-, corrected- and online preferences.",
+    label = "ex2-pref-corr-quant"
+  )
+}
+```
+
+```{r ex2-tradeoffs-org-vs-corr-online, eval=TRUE, fig.cap="The mean absolute error of the original, corrected, and online trade-offs.", fig.height=8, fig.align='center', out.width='90%'}
+par(mfrow = c(3,2), mar = c(5,3,2,0))
+xld <- range(c(density(diffs_org$MAE)$x, density(diffs_online$MAE)$x))
+xl <- range(c(diffs_org$MAE, diffs_online$MAE))
+
+plot(density(diffs_org$MAE), xlim = xld, main = "Density MAE original trade-offs.")
+grid()
+plot(ecdf(diffs_org$MAE), xlim = xl, main = "ECDF MAE original trade-offs.")
+grid()
+
+plot(density(diffs_corr$MAE), xlim = xld, main = "Density MAE correted trade-offs.")
+grid()
+plot(ecdf(diffs_corr$MAE), xlim = xl, main = "Density MAE correted trade-offs.")
+grid()
+
+plot(density(diffs_online$MAE), xlim = xld, main = "Density MAE online trade-offs.")
+grid()
+plot(ecdf(diffs_online$MAE), xlim = xl, main = "Density MAE online trade-offs.")
+grid()
+```
+
+
+Similar to the method of a priori correction of preference, this method achieves trade-offs that are significantly closer to the desired trade-off.
+Figure \ref{fig:ex2-tradeoffs-org-vs-corr-online} shows that approx. $50$% or more of all trade-offs are off by less than $0.3$ for each single objective in the score space.
+If we compare the quantiles of this method to the a priori correction method (table \ref{tab:ex2-pref-corr-quant}), then we see that the online method has a consistently larger error than the a prior correction method, but its distribution is more compact, in that the largest error was $\approx0.09$ less (the $100$% quantile).
+
+
+
+## Examining possible trade-offs
+
+A DM might expect that the space of all solutions be homogeneous (i.e., having equal density at each point), especially in problems where all objectives have been scaled into a uniform range.
+That would imply that each objective's loss is equally likely.
+Figure \ref{fig:ex2-pareto-solution-space} (a) demonstrates this assumption, where all points ${\neq}\{1,1,1\}$ represent a linear trade-off between objectives' scores.
+This assumption, however, is unlikely to hold in practice. In figure \ref{fig:ex2-pareto-solution-space} (b) we have created a separate linear range for each of the three objectives in the Viennet function, where start and end correspond to lowest and highest observed marginal losses, respectively. Then, these losses were mapped into the score space. Recall that none of the cumulative probability densities from figure \ref{fig:ex2-high-prec} was that of a standard uniform distribution.
+Therefore, the mapping results in an inhomogeneous space of feasible (but not necessarily optimal) solutions.
+Consider, for example, the second objective. Its marginal losses are in the range of ${\approx}\interval{15}{90}$. The fallacy lies in the expectation that, for example, the two improvements from $60$ to $50$ and $30$ to $20$ are equally good. However, while the former corresponds to an actual improvement in terms of scores of ${\approx}0.037$, the latter corresponds to a staggering ${\approx}0.269$.
+This shows that we can use the mapping into the score space to unveil that a thought-of linearly behaving and homogeneous space of solutions actually is not.
+In reality, even low-resolution $\operatorname{ECDF}$s can quite significantly help to understand the solution density. Also, their precision improves with each observed sample.
+
+
+
+```{r eval=TRUE}
+color.gradient <- (function() {
+  steps <- 1000
+  m <- viridisLite::viridis(n = steps)
+  Vectorize(function(x) {
+    substr(m[min(steps, max(1, round(x * steps)))], 1, 7)
+  })
+})()
+```
+
+
+```{r eval=TRUE}
+n <- 18
+temp <- matrix(data = rep(NA, 3*n^3), ncol = 3)
+
+v <- seq(from = 0.01, to = 0.99, length.out=n)
+for (i in 1:n) {
+  for (j in 1:n) {
+    for (k in 1:n) {
+      temp[k + (j-1)*n + (i-1)*n*n,] <- c(v[i], v[j], v[k])
+    }
+  }
+}
+
+temp <- as.data.frame(temp)
+temp$s_total <- sapply(X = 1:nrow(temp), FUN = function(i) {
+  sum(temp[i,])
+})
+temp$col <- color.gradient(temp$s_total / max(temp$s_total))
+```
+
+```{r eval=FALSE}
+rgl::plot3d(x = temp[, 1], y = temp[, 2], z = temp[, 3], col = temp$col, xlab = "f1", ylab = "f2", zlab = "f3", xlim = c(0,1), ylim=c(0,1), zlim=c(0,1), add=FALSE)
+```
+
+```{r eval=TRUE}
+temp1 <- matrix(data = rep(NA, 3*n^3), ncol = 3)
+
+v1 <- seq(from = min(ex2_high_prec_ecdfs$ecdf_data$f1), to = max(ex2_high_prec_ecdfs$ecdf_data$f1), length.out=n)
+v2 <- seq(from = min(ex2_high_prec_ecdfs$ecdf_data$f2), to = max(ex2_high_prec_ecdfs$ecdf_data$f2), length.out=n)
+v3 <- seq(from = min(ex2_high_prec_ecdfs$ecdf_data$f3), to = max(ex2_high_prec_ecdfs$ecdf_data$f3), length.out=n)
+
+for (i in 1:n) {
+  for (j in 1:n) {
+    for (k in 1:n) {
+      temp1[k + (j-1)*n + (i-1)*n*n,] <- c(
+        1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f1(v1[i]),
+        1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f2(v2[j]),
+        1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f3(v3[k])
+      )
+    }
+  }
+}
+
+temp1 <- as.data.frame(temp1)
+temp1$s_total <- sapply(X = 1:nrow(temp1), FUN = function(i) {
+  sum(temp1[i,])
+})
+temp1$col <- color.gradient(temp1$s_total / 3)
+```
+
+```{r eval=FALSE}
+rgl::plot3d(x = temp1[, 1], y = temp1[, 2], z = temp1[, 3], col = temp$col, xlab = "f1", ylab = "f2", zlab = "f3", xlim = c(0,1), ylim=c(0,1), zlim=c(0,1), add=FALSE)
+```
+
+```{r ex2-pareto-solution-space, eval=TRUE, fig.cap='Solutions for a three-objective problem.', fig.subcap=c('Ideal and homogeneous solution density.', 'Inhomogeneous solution density of the Viennet function.'), fig.ncol=2, fig.align='center', out.width='45%'}
+par(mar = c(2,2,2,2), oma=c(0,0,0,0))
+plot3D::scatter3D(x = temp[,1], y = temp[,2], z = temp[,3], add = FALSE, xlim = c(0,1), ylim = c(0,1), zlim = c(0,1), col = viridis::viridis(100), colvar = temp$s_total, phi = 25, theta = 50, pch=1, cex.p=.7, xlab = "Score 1", ylab = "Score 2", zlab = "Score 3", colkey = list("plot" = FALSE), r = 2, bty = "b2", ticktype = "detailed", nticks = 5)
+#r = 10, ticktype = "detailed", nticks = 5, 
+
+plot3D::scatter3D(x = temp1[,1], y = temp1[,2], z = temp1[,3], add = FALSE, xlim = c(0,1), ylim = c(0,1), zlim = c(0,1), col = viridis::viridis(100), colvar = temp1$s_total, phi = 25, theta = 50, pch=1, cex.p=.7, xlab = "Score 1", ylab = "Score 2", zlab = "Score 3", colkey = list("plot" = FALSE), r = 2, bty = "b2", ticktype = "detailed", nticks = 5)
+# colkey = list("dist" = -0.025, "length" = .66, "width" = .66)
+```
+
+
+The Pareto front of the Viennet function has a complex shape. If we map the results gotten into the score space $\mathcal{S}$, it will allow us to understand which trade-offs are actually feasible.
+This is another important piece, as some DM might not be aware that the requested trade-off is not possible (that is, there is no Pareto optimal solution with the given trade-off, or close to it).
+Figure \ref{fig:ex2-tradeoff-density-2d} shows the trade-off ratios between the scores that were actually reached by the solutions in the Pareto efficient set.
+Without having mapped obtained solutions into the score space, there is no way of understanding whether the desired trade-off was actually obtained.
+With the obtained Pareto efficient trade-offs, we can now also attempt to learn whether there is a linear relation between the preference and the associated solution in the score space.
+
+
+```{r eval=TRUE}
+pref_to_ratio <- function(p) {
+  p <- p / max(p)
+  c(p[1]/p[2], p[2]/p[3])
+}
+ratio_to_pref <- function(r) {
+  s <- c(r[1], 1, 1/r[2])
+  s / max(s)
+}
+stopifnot(all.equal(c(0.2, 1.0, 0.9), ratio_to_pref(pref_to_ratio(c(0.2, 1.0, 0.9)))))
+```
+
+```{r eval=TRUE}
+# Let's map the Pareto front's objective values into the score space,
+# and then we record all ratios.
+ex2_pareto_front <- readRDS(file = "../results/ex2_pareto_front.rds")
+ex2_pareto_front_ratios <- matrix(nrow = nrow(ex2_pareto_front), ncol = 2)
+
+for (i in 1:nrow(ex2_pareto_front)) {
+  s <- c(
+    1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f1(ex2_pareto_front[i, "f1"]),
+    1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f2(ex2_pareto_front[i, "f2"]),
+    1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f3(ex2_pareto_front[i, "f3"]))
+  
+  ex2_pareto_front_ratios[i,] <- pref_to_ratio(s)
+}
+```
+
+```{r eval=TRUE}
+temp <- ex2_pareto_front_ratios
+temp[temp >= Inf] <- NA
+temp[temp <= -Inf] <- NA
+temp <- temp[complete.cases(temp),]
+# Remove extreme case in first ratio:
+temp <- temp[temp[,1] > min(temp[,1]),]
+# Remove extreme cases in 2nd ratio:
+temp <- temp[temp[,2] < 0.83,]
+```
+
+
+```{r eval=FALSE}
+ex2_tradeoff_density_2d <- loadResultsOrCompute(file = "../results/ex2_tradeoff_density_2d.rds", computeExpr = {
+  MASS::kde2d(x = temp[, 1], y = temp[, 2], n = 1500)
+})
+```
+
+```{r eval=FALSE}
+persp3d(x=ex2_tradeoff_density_2d$x, y = ex2_tradeoff_density_2d$y, z = ex2_tradeoff_density_2d$z,
+        aspect = c(1, 1, 0.5), col = "lightblue", polygon_offset = 1)
+highlevel()
+```
+
+```{r ex2-tradeoff-density-2d, eval=TRUE, fig.cap="The density of the trade-offs that were reached by the solutions in the Pareto efficient set.", fig.align='center', out.width='90%'}
+par(mar = c(2,0,0,0), oma=c(0,0,0,0))
+temp1 <- MASS::kde2d(x = temp[, 1], y = temp[, 2], n = 50)
+plot3D::persp3D(x = temp1$x, y = temp1$y, z = temp1$z, colvar = temp1$z, phi = 20, theta = -110, col = rev(viridis::viridis(100)), colkey = list("dist" = -0.05, "length" = .45, "width" = .66, "cex.clab" = 0.8, "side" = 1, cex.axis = 1), r = 10, bty = "b2", xlab = "Score 1 / Score 2", ylab = "Score 2 / Score 3", zlab = "Relative likelihood", border = "#333333", lwd = .1, ticktype = "detailed", nticks = 3)
+```
+
+
+```{r eval=TRUE, warning=FALSE}
+# In this block, we generate random trade-offs that are actually possible.
+# For that, we will sample inversely from the joint PDF. The generated
+# trade-offs will then be used in the original- and corrected scenarios,
+# so that we compare which method generates more accurate trade-offs.
+ex2_possible_tradeoff_ratios <- loadResultsOrCompute(file = "../results/ex2_possible_tradeoff_ratios.rds", computeExpr = {
+  n_trade_offs <- 2000
+  
+  as.data.frame(doWithParallelCluster(numCores = 123, expr = {
+    ex2_joint_pdf <- function(x, y) {
+      pracma::interp2(x = temp1$x, y = temp1$y, Z = temp1$z, xp = x, yp = y)
+    }
+    ex2_toff_x_ppf <- make_inverse_ecdf(values = temp[, 1])
+    
+    library(foreach)
+    
+    foreach::foreach(
+      idx = 1:n_trade_offs,
+      .inorder = TRUE,
+      .combine = rbind
+    ) %dopar% {
+      set.seed(1337 + idx)
+      
+      # Generate random x,
+      use_x <- ex2_toff_x_ppf(runif(1))
+      tempf.xslice <- function(y) {
+        ex2_joint_pdf(x = rep(use_x, length(y)), y = y)
+      }
+      slice.size <- pracma::integral(tempf.xslice, min(temp1$y), max(temp1$y), method = "K")
+      tempf.xslice1 <- function(y) {
+        tempf.xslice(y = y) / slice.size
+      }
+      
+      # .. then find associated y:
+      find_x <- runif(1)
+      
+      res <- nloptr::nloptr(
+        x0 = max(temp1$y),
+        lb = min(temp1$y),
+        ub = max(temp1$y),
+        eval_f = function(x) {
+          (pracma::integral(tempf.xslice1, min(temp1$y), x, method = "K") - find_x)^2
+        },
+        opts = list(
+          maxeval = 50,
+          algorithm = "NLOPT_GN_DIRECT_L_RAND")
+      )
+      
+      res1 <- `colnames<-`(matrix(data = c(use_x, res$solution), ncol = 2), c("r1", "r2"))
+      lock <- filelock::lock("trade-offs.lock")
+      write(paste0(unname(c(use_x, res$solution)), collapse = ","), file = "trade-offs.csv", append = TRUE)
+      filelock::unlock(lock = lock)
+    }
+  }))
+})
+```
+
+
+```{r eval=TRUE}
+# In order to estimate by how much the original problem's solution deviate from the
+# requested trade-off, we will compute the original problem on the known to be working
+# trade-offs that were generated previously.
+ex2_possible_tradeoff_ratios_org_diffs <- loadResultsOrCompute(file = "../results/ex2_possible_tradeoff_ratios_org_diffs.rds", computeExpr = {
+  tradeoffs_org <- doWithParallelCluster(numCores = 15, expr = {
+    library(foreach)
+    
+    foreach::foreach(
+      idx = 1:nrow(ex2_possible_tradeoff_ratios),
+      .inorder = TRUE,
+      .combine = rbind
+    ) %dopar% {
+      set.seed(idx)
+      r <- ex2_possible_tradeoff_ratios[idx,]
+      w <- ratio_to_pref(r)
+      
+      res <- nloptr::nloptr(
+        x0 = runif(2, min = lower, max = upper),
+        opts = list(
+          maxeval = 2e4,
+          algorithm = "NLOPT_GN_DIRECT_L_RAND"),
+        eval_f = function(x) {
+          w[1] * ex2_f1(x[1], x[2]) + w[2] * ex2_f2(x[1], x[2]) + w[3] * ex2_f3(x[1], x[2])
+        },
+        lb = rep(lower, 2),
+        ub = rep(upper, 2))
+      
+      s <- res$solution
+      `colnames<-`(matrix(data = c(w, ex2_f1(s[1], s[2]), ex2_f2(s[1], s[2]), ex2_f3(s[1], s[2]),
+        1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f1(ex2_f1(s[1], s[2])),
+        1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f2(ex2_f2(s[1], s[2])),
+        1 - ex2_high_prec_ecdfs$ecdf_funcs$ecdf_f3(ex2_f3(s[1], s[2])),
+        res$objective), nrow = 1), c(paste0("w", 1:3), paste0("f", 1:3), paste0("s", 1:3), "objective"))
+    }
+  })
+  
+  diffs_org_for_working <- ex2_tradeoff_metrics_all(to_wanted = tradeoffs_org[, 1:3], to_gotten = tradeoffs_org[, 7:9])
+  
+  list(
+    "tradeoffs_org" = tradeoffs_org,
+    "diffs_org_for_working" = diffs_org_for_working)
+})
+
+```
+
+
+
+
+We have already shown results that indicate that the relation between an expressed preference and the obtained trade-off is of non-linear nature for the Viennet problem.
+However, these results included weight preferences for which no or no nearby efficient solutions exist. For example, there are _no_ Pareto efficient solutions with a score for the second objective of less than ${\approx}0.681$. Requesting a trade-off that would handicap the second objective to a score less than that is therefore not possible.
+Figure \ref{fig:ex2-tradeoff-density-2d} shows the ratios between trade-offs of the first and second score, as well as the second and third score.
+We are interested in finding out whether the preferences in the set $\mathcal{P}^\star$ lead to similar trade-offs, which would imply a linear relationship.
+We do not want to reuse any of the solutions generated for the Pareto front, so we will sample inversely from the joint distribution of observed trade-offs.
+After running the optimization with the known to be feasible preferences, it turns out that the mapping $\mathcal{P}^\star\to\mathcal{S}$ is almost linear, as there is only slight deviation.
+It also appears that the deviation stems almost exclusively from the second score.
+Figure \ref{fig:ex2-pstar-to-s} show the results in more detail.
+
+
+```{r ex2-pstar-to-s, eval=TRUE, fig.cap="Mapping between feasible preferences and solutions in the score space.", fig.height=6, fig.align='center', out.width='90%'}
+par(mfrow = c(2,2), mar = c(5,3,2,0))
+temp <- ex2_possible_tradeoff_ratios_org_diffs$diffs_org_for_working
+plot(density(temp$MAE), main = "Density MAE of feasible preferences.")
+grid()
+plot(density(temp$PERC_DIFF_1), main = latex2exp::TeX("Percentual difference for $s_1$"))
+grid()
+plot(density(temp$PERC_DIFF_2), main = latex2exp::TeX("Percentual difference for $s_2$"))
+grid()
+plot(density(temp$PERC_DIFF_3), main = latex2exp::TeX("Percentual difference for $s_2$"))
+grid()
+```
+
+
+
+
+
+# References {-}
+
+<div id="refs"></div>
+
+
+
+
+
+
