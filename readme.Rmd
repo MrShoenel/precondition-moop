@@ -16,7 +16,7 @@ In this repository, we gather code, experimental setups, and results for attempt
 In this repository, you will find:
 
 * [__Notebooks__ (R)](./notebooks) - Notebooks that can be (re-)run by users to reproduce our results. All results are included, such that the notebooks will only recompute them if you delete them. The notebooks are very detailed and document all steps necessary.
-    * [__An Approach to Ordering Objectives and Pareto Efficient Solutions__](./notebooks/pareto-order.md) - A second notebooks focusing on a low- or no-preference approach to ordering Pareto efficient solutions and single objectives.
+    * [__An Approach to Ordering Objectives and Pareto Efficient Solutions__](./notebooks/pareto-order.md) - A second notebook focusing on a low- or no-preference approach to ordering Pareto efficient solutions and single objectives. There exists a paper-like render of this notebook on arXiv for the time being [https://doi.org/10.48550/arXiv.2205.15291](https://doi.org/10.48550/arXiv.2205.15291) [@honel2022pareto].
     * [__Pre-conditioning of multi-objective optimization problems__](./notebooks/precondition-moop.md) - The first notebook of this repository.
 * [__Results__ (RDS)](./results) - All data required for reproduction is included. All the results, too. Some of these may take a long time to compute, so be aware.
 

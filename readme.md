@@ -11,9 +11,12 @@ In this repository, you will find:
     the notebooks will only recompute them if you delete them. The
     notebooks are very detailed and document all steps necessary.
     -   [**An Approach to Ordering Objectives and Pareto Efficient
-        Solutions**](./notebooks/pareto-order.md) - A second notebooks
+        Solutions**](./notebooks/pareto-order.md) - A second notebook
         focusing on a low- or no-preference approach to ordering Pareto
-        efficient solutions and single objectives.
+        efficient solutions and single objectives. There exists a
+        paper-like render of this notebook on arXiv for the time being
+        <https://doi.org/10.48550/arXiv.2205.15291> (Hönel and Löwe
+        2022).
     -   [**Pre-conditioning of multi-objective optimization
         problems**](./notebooks/precondition-moop.md) - The first
         notebook of this repository.
@@ -23,6 +26,14 @@ In this repository, you will find:
 
 # References
 
-<div id="refs">
+<div id="refs" class="references csl-bib-body hanging-indent">
+
+<div id="ref-honel2022pareto" class="csl-entry">
+
+Hönel, Sebastian, and Welf Löwe. 2022. “An Approach to Ordering
+Objectives and Pareto Efficient Solutions.” arXiv.
+<https://doi.org/10.48550/arXiv.2205.15291>.
+
+</div>
 
 </div>
