@@ -42,7 +42,7 @@ header-includes:
 - \usepackage{xurl}
 - \usepackage[nottoc]{tocbibind}
 - \usepackage{subfig}
-abstract: "Solutions to multi-objective optimization problems can generally not be compared or ordered, due to the lack of orderability of the single objectives. Furthermore, decision makers are often made to believe that scaled objectives can be compared. This is a fallacy, as the space of solutions is in practice inhomegeneous without linear trade-offs. We present a method that uses the probability integral transform in order to map the objectives of a problem into scores that all share the same range. In the score space, we can learn which trade-offs are actually possible and develop methods for mapping a desired trade-off back into the preference space. Our results demonstrate that Pareto efficient solutions can be ordered using a low- or no-preference aggregation of the single objectives. When using scores instead of raw objectives during optimization, it allows obtaining trade-offs significantly closer to the expressed preference. Using a non-linear mapping for transforming a desired solution in the score space to the required preference for optimization improves this even more drastically."
+abstract: "Solutions to multi-objective optimization problems can generally not be compared or ordered, due to the lack of orderability of the single objectives. Furthermore, decision-makers are often made to believe that scaled objectives can be compared. This is a fallacy, as the space of solutions is in practice inhomogeneous without linear trade-offs. We present a method that uses the probability integral transform in order to map the objectives of a problem into scores that all share the same range. In the score space, we can learn which trade-offs are actually possible and develop methods for mapping the desired trade-off back into the preference space. Our results demonstrate that Pareto efficient solutions can be ordered using a low- or no-preference aggregation of the single objectives, thereby transforming the problem into a single-objective optmization problem that does not require a decision-maker. When using scores instead of raw objectives during optimization, the process allows for obtaining trade-offs significantly closer to the expressed preference. Using a non-linear mapping for transforming a desired solution in the score space to the required preference for optimization improves this even more drastically."
 ---
 
 \newcommand*\mean[1]{\overline{#1}}
@@ -75,6 +75,8 @@ Sys.setenv(LC_CTYPE = "en_US.UTF-8")
 
 # Introduction
 
+_Please note_: This is early-stage research. The canonical reference to the arXiv pre-print server is [@honel2022pareto].
+
 Solving multi-objective optimization problems (MOOPs, \eqref{eq:moop}) are problems of two or more conflicting problems (or objectives).
 
 \begin{align}
@@ -86,18 +88,19 @@ Their solving may lead to a (possibly infinitely) large solution space $\mathcal
 Each vector $\mathbf{s}_i$ in this space holds a solution for each of the optimized objectives.
 The set of Pareto _efficient_ solutions comprises those solutions that cannot be further improved.
 Because vectors in the Pareto efficient solution space cannot be ordered completely [@miettinen2008], they are traditionally regarded as equally desirable (in the mathematical sense, that is).
-A decision maker (DM) is then consulted to pick a preferred solution.
+A decision-maker (DM) is then consulted to pick a preferred solution.
 Even worse, it may not be trivial to pick some most preferred solution, as the role of the chosen weights is misleading [@roy1996theoretical].
 The mathematical sense is, however, not congruent with interpreting objectives as scores. While in some cases objectives can be scaled into some uniform, dimensionless scale, the distribution of their associated losses remains unknown and __must__ be assumed to be non-uniform. In other words, not each attainable loss is equally likely, which drastically exacerbates the DMs situation of having to pick _and_ actually obtain the desired trade-off.
 
 
-We demonstrate an approach to approximating the order of Pareto efficient solutions, based on the marginal distributions of each objective.
+We demonstrate an approach based on the marginal distributions of each objective to ordering single objectives, which further allows ordering Pareto efficient solutions.
+Using no- or just few additional preferences for each objective, multi-objective optimization problems can effectively be transformed into single-objective optimization problems, which removes the requirement of a decision-maker.
 This approach transforms each objective into a score with standard uniform distribution, which allows comparing solution vectors.
 Used as either an a priori or a posteriori method, we can show that obtaining efficient solutions significantly closer to the desired trade-off is possible, using two distinct methods.
 The first method significantly improves precision by replacing the raw objectives with their scores during optimization.
 The second method improves the precision even more drastically, but requires the computation of some Pareto efficient solutions, in order to learn the non-linear mapping between preferences and solutions in the score space.
 None of the methods require the objectives to be scaled or having to know or approximate nadir-, ideal-, or utopian-vectors.
-Furthermore, by mapping objectives to scores, it allows a DM to gain insights into the density and homegenuity of the solution space, as well as to understand which trade-offs are actually possible.
+Furthermore, by mapping objectives to scores, it allows a DM to gain insights into the density and homogeneity of the solution space, as well as to understand which trade-offs are actually possible.
 We use the Viennet function [@viennet1996] to empirically gather some results.
 
 
@@ -134,7 +137,7 @@ The result of this may or may not be a unique solution.
 
 While preference may be expressed, it is not necessarily adhered to, neither by the solution algorithm, nor by the problem itself.
 When specifying preference, a DM might obtain a solution close to that preference. However, that solution is in the objective space $\mathcal{O}$, ___not___ in the score space $\mathcal{S}$.
-The latter is perhaps the only space workable for human DMs. This means that so far, expressing preference with non-uniformly distributed objectives has never led to the desired solution.
+The latter is perhaps the only space workable for human DMs. This means that so far, expressing preference with non-uniformly distributed objectives has most likely not led to the desired solution.
 
 
 In order to obtain a trade-off close to the desired trade-off, we identify two methods.
@@ -272,7 +275,7 @@ ex2_high_prec_ecdfs <- loadResultsOrCompute(file = "../results/ex2_high_prec_ecd
 })
 ```
 
-```{r ex2-high-prec, eval=TRUE, echo=FALSE, fig.cap="The empirical densities and cumulative distributions of the three objectives of the Viennet function.", fig.height=7, fig.show='hold', fig.align='center', out.width='90%'}
+```{r ex2-high-prec, eval=TRUE, echo=FALSE, fig.cap="The empirical densities and cumulative distributions of the three objectives of the Viennet function.", fig.height=9, fig.show='hold', fig.align='center', out.width='90%'}
 layout(mat = matrix(data = c(1,2,3,4,5,6), ncol = 2, byrow = TRUE))
 par(mar=c(5,4,1.5,1), oma = rep(0, 4))
 
@@ -382,7 +385,7 @@ range(temp$s_total)
 
 The total scores for each of the solutions are in the interval $[{\approx}1.848,{\approx}2.856]$.
 This means that any solution with arbitrary combination of scores less than ${\approx}1.848$ is not Pareto efficient.
-There is a unique best solution for this problem with objective values of $\left\{f_1\approx0.9231,f_2\approx15.1532,f_3\approx0.0307\right\}$, marked by a red square in figure \ref{fig:ex2-pareto-front}. The solution marked by the purple square is the worst in the Pareto efficient set.
+There is a unique best solution at $\mathbf{x}\approx\left\{-0.6708,0.4449\right\}$ for this problem with objective values of $\left\{f_1\approx0.9231,f_2\approx15.1532,f_3\approx0.0307\right\}$, marked by a red square in figure \ref{fig:ex2-pareto-front}. The solution marked by the purple square is the worst in the Pareto efficient set.
 A lighter color in this figure indicates a higher total score.
 The distribution of the total scores is then shown in figure \ref{fig:dens-total-scores}.
 In our case, the space containing the highest-scoring solutions is continuous and contiguous, i.e., the Pareto efficient solutions are to be found in a single area, and there is no area disjoint from that which has high scores, too.
@@ -509,37 +512,37 @@ diffs_org <- loadResultsOrCompute(file = "../results/ex2_diffs_org.rds", compute
 })
 ```
 
-```{r}
-diffs_corr <- ex2_tradeoff_metrics_all(to_wanted = tradeoffs_org[, paste0("w", 1:3)], to_gotten = pred)
-```
-
 ```{r eval=TRUE}
 diffs_corr <- loadResultsOrCompute(file = "../results/ex2_diffs_corr.rds", computeExpr = {
   ex2_tradeoff_metrics_all(to_wanted = valid_y, to_gotten = pred)
 })
 ```
 
-```{r ex2-tradeoffs-org-vs-corr, eval=FALSE, fig.cap="The mean absolute error of the original and corrected trade-offs.", fig.height=7, fig.align='center', out.width='90%'}
+
+```{r ex2-tradeoffs-org-vs-corr, eval=FALSE, fig.cap="The absolute error of the original and corrected trade-offs.", fig.height=7, fig.align='center', out.width='90%'}
 par(mfrow = c(2,2), mar = c(5,3,2,0))
-xld <- range(c(density(diffs_org$MAE)$x, density(diffs_corr$MAE)$x))
-xl <- range(c(diffs_org$MAE, diffs_corr$MAE))
+temp0 <- abs(as.numeric(unlist(diffs_org[, paste0("DEVIATION_", 1:3)])))
+temp1 <- abs(as.numeric(unlist(diffs_corr[, paste0("DEVIATION_", 1:3)])))
 
-plot(density(diffs_org$MAE), xlim = xld, main = "Density MAE original trade-offs.")
+xld <- range(c(density(temp0)$x, density(temp1)$x))
+xl <- range(c(temp0, temp1))
+
+plot(density(temp0), xlim = xld, main = "Density abs. error original trade-offs.")
 grid()
-plot(ecdf(diffs_org$MAE), xlim = xl, main = "ECDF MAE original trade-offs.")
+plot(ecdf(temp0), xlim = xl, main = "ECDF abs. error original trade-offs.")
 grid()
 
-plot(density(diffs_corr$MAE), xlim = xld, main = "Density MAE corrected trade-offs.")
+plot(density(temp1), xlim = xld, main = "Density abs. error corrected trade-offs.")
 grid()
-plot(ecdf(diffs_corr$MAE), xlim = xl, main = "Density MAE corrected trade-offs.")
+plot(ecdf(temp1), xlim = xl, main = "Density abs. error corrected trade-offs.")
 grid()
 ```
 
 
 Figure \ref{fig:ex2-tradeoffs-org-vs-corr-online} shows a significant improvement of the obtained trade-offs using a corrected preference.
 We also generate some quantiles (see table \ref{tab:ex2-pref-corr-quant}).
-While still not perfect, $50$% of all trade-offs show a mean absolute error of $\approx0.129$.
-We also obtain much less extreme deviations, and no deviation is larger than $\approx0.679$.
+While still not perfect, $50$% of all trade-off ratios show a mean absolute error of ${\approx}0.07$.
+We also obtain much less extreme deviations, with the $90$% quantile being ${\approx}0.46$ (compared to ${\approx}0.98$ of the original problem).
 
 
 
@@ -666,11 +669,15 @@ diffs_online <- loadResultsOrCompute(file = "../results/ex2_diffs_online.rds", c
 ```
 
 ```{r eval=TRUE}
+temp0 <- abs(as.numeric(unlist(diffs_org[, paste0("DEVIATION_", 1:3)])))
+temp1 <- abs(as.numeric(unlist(diffs_corr[, paste0("DEVIATION_", 1:3)])))
+temp2 <- abs(as.numeric(unlist(diffs_online[, paste0("DEVIATION_", 1:3)])))
+
 temp <- `rownames<-`(x = rbind(
   paste0(seq(0, 100, by=10), "%"),
-  round(quantile(x = diffs_org$MAE, probs = seq(0, 1, by=.1)), 5),
-  round(quantile(x = diffs_corr$MAE, probs = seq(0, 1, by=.1)), 5),
-  round(quantile(x = diffs_online$MAE, probs = seq(0, 1, by=.1)), 5)), value = c("Quantile", "org", "corr", "online"))
+  round(quantile(x = temp0, probs = seq(0, 1, by=.1)), 6),
+  round(quantile(x = temp1, probs = seq(0, 1, by=.1)), 6),
+  round(quantile(x = temp2, probs = seq(0, 1, by=.1)), 6)), value = c("Quantile", "Original", "Corrected", "Online"))
 
 if (interactive()) {
   temp
@@ -679,37 +686,48 @@ if (interactive()) {
     x = t(temp),
     booktabs = TRUE,
     row.names = FALSE,
-    caption = "Quantiles of trade-off errors for the original-, corrected- and online preferences.",
+    caption = "Quantiles of trade-off absolute ratio errors for the original-, corrected- and online preferences.",
     label = "ex2-pref-corr-quant"
   )
 }
 ```
 
-```{r ex2-tradeoffs-org-vs-corr-online, eval=TRUE, fig.cap="The mean absolute error of the original, corrected, and online trade-offs.", fig.height=8, fig.align='center', out.width='90%'}
+```{r ex2-tradeoffs-org-vs-corr-online, eval=TRUE, fig.cap="The absolute error of the original, corrected, and online trade-offs.", fig.height=9, fig.align='center', out.width='90%'}
 par(mfrow = c(3,2), mar = c(5,3,2,0))
-xld <- range(c(density(diffs_org$MAE)$x, density(diffs_online$MAE)$x))
-xl <- range(c(diffs_org$MAE, diffs_online$MAE))
 
-plot(density(diffs_org$MAE), xlim = xld, main = "Density MAE original trade-offs.")
+temp0 <- abs(as.numeric(unlist(diffs_org[, paste0("DEVIATION_", 1:3)])))
+temp1 <- abs(as.numeric(unlist(diffs_corr[, paste0("DEVIATION_", 1:3)])))
+temp2 <- abs(as.numeric(unlist(diffs_online[, paste0("DEVIATION_", 1:3)])))
+
+xld <- range(c(density(temp0)$x, density(temp1)$x))
+xl <- range(c(temp0, temp1))
+
+plot(density(temp0), xlim = xld, main = "Density abs. error original trade-offs.")
 grid()
-plot(ecdf(diffs_org$MAE), xlim = xl, main = "ECDF MAE original trade-offs.")
+plot(ecdf(temp0), xlim = xl, main = "ECDF abs. error original trade-offs.", xlab = "Absolute ratio deviation")
 grid()
 
-plot(density(diffs_corr$MAE), xlim = xld, main = "Density MAE correted trade-offs.")
+plot(density(temp1), xlim = xld, main = "Density abs. error corrected trade-offs.")
 grid()
-plot(ecdf(diffs_corr$MAE), xlim = xl, main = "Density MAE correted trade-offs.")
+plot(ecdf(temp1), xlim = xl, main = "ECDF abs. error corrected trade-offs.", xlab = "Absolute ratio deviation")
 grid()
 
-plot(density(diffs_online$MAE), xlim = xld, main = "Density MAE online trade-offs.")
+plot(density(temp2), xlim = xld, main = "Density abs. error online trade-offs.")
 grid()
-plot(ecdf(diffs_online$MAE), xlim = xl, main = "Density MAE online trade-offs.")
+plot(ecdf(temp2), xlim = xl, main = "ECDF abs. error online trade-offs.", xlab = "Absolute ratio deviation")
 grid()
+```
+
+```{r eval=FALSE}
+c(mean(temp0), mean(temp1), mean(temp2))
 ```
 
 
 Similar to the method of a priori correction of preference, this method achieves trade-offs that are significantly closer to the desired trade-off.
-Figure \ref{fig:ex2-tradeoffs-org-vs-corr-online} shows that approx. $50$% or more of all trade-offs are off by less than $0.3$ for each single objective in the score space.
-If we compare the quantiles of this method to the a priori correction method (table \ref{tab:ex2-pref-corr-quant}), then we see that the online method has a consistently larger error than the a prior correction method, but its distribution is more compact, in that the largest error was $\approx0.09$ less (the $100$% quantile).
+Figure \ref{fig:ex2-tradeoffs-org-vs-corr-online} show a density of absolute errors for the online method similar to the one obtained using corrected  trade-offs. Approximately $50$% of each single ratio are off absolutely by $0.2$ or less for it.
+For the method of corrected trade-offs, single approx. $50$% of all ratios are off by $0.07$ or less.
+If we compare the quantiles of this method to the a priori correction method (table \ref{tab:ex2-pref-corr-quant}), then we see that the online method has a consistently larger error than the a priori correction method.
+The mean absolute deviation for each ratio and method is ${\approx}0.5345$ (original), ${\approx}0.1545$ (corrected), and ${\approx}0.2915$ (online).
 
 
 
@@ -984,16 +1002,16 @@ It also appears that the deviation stems almost exclusively from the second scor
 Figure \ref{fig:ex2-pstar-to-s} show the results in more detail.
 
 
-```{r ex2-pstar-to-s, eval=TRUE, fig.cap="Mapping between feasible preferences and solutions in the score space.", fig.height=6, fig.align='center', out.width='90%'}
+```{r ex2-pstar-to-s, eval=TRUE, fig.cap="Mapping between feasible preferences and solutions in the score space.", fig.height=7, fig.align='center', out.width='90%'}
 par(mfrow = c(2,2), mar = c(5,3,2,0))
 temp <- ex2_possible_tradeoff_ratios_org_diffs$diffs_org_for_working
-plot(density(temp$MAE), main = "Density MAE of feasible preferences.")
+plot(density(temp$MAE), main = "Density MAE of feasible prefs.")
 grid()
-plot(density(temp$PERC_DIFF_1), main = latex2exp::TeX("Percentual difference for $s_1$"))
+plot(density(temp$PERC_DIFF_1), main = "Percentual difference first score.")
 grid()
-plot(density(temp$PERC_DIFF_2), main = latex2exp::TeX("Percentual difference for $s_2$"))
+plot(density(temp$PERC_DIFF_2), main = "Percentual difference second score.")
 grid()
-plot(density(temp$PERC_DIFF_3), main = latex2exp::TeX("Percentual difference for $s_2$"))
+plot(density(temp$PERC_DIFF_3), main = "Percentual difference third score.")
 grid()
 ```
 
