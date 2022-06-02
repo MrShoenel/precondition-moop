@@ -9,8 +9,9 @@ ex2_tradeoff_metrics <- function(to_wanted, to_gotten) {
     data = c(
       Metrics::mae(actual = v2, predicted = v1),
       Metrics::rmse(actual = v2, predicted = v1),
-      abs(100 * (1 - v1/v2)))
-  ), value = c("MAE", "RMSE", paste0("PERC_DIFF_", 1:length(v1))))
+      abs(100 * (1 - v1/v2)),
+      v2 - v1)
+  ), value = c("MAE", "RMSE", paste0("PERC_DIFF_", 1:length(v1)), paste0("DEVIATION_", 1:length(v1))))
 }
 
 
