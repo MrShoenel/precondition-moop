@@ -27,8 +27,18 @@
 
 # Introduction
 
+*Please note*: This is early-stage research. The canonical reference to
+the arXiv pre-print server is ([Hönel and Löwe
+2022](#ref-honel2022pareto)).
+
 Solving multi-objective optimization problems (MOOPs, ) are problems of
 two or more conflicting problems (or objectives).
+
+$$
+\begin{align}
+  \min\_{\mathbf{x}\in\mathcal{D}}\\,\left\\{f_1(\mathbf{x}),\dots,f_k(\mathbf{x})\right\\},\text{ where $k\geq2$.}\label{eq:moop}
+\end{align}
+$$
 
 The goal is to find some **x**<sup>⋆</sup> in the *decision space* 𝒟
 that minimizes the loss across all single objectives simultaneously.
@@ -39,7 +49,7 @@ solutions comprises those solutions that cannot be further improved.
 Because vectors in the Pareto efficient solution space cannot be ordered
 completely ([Miettinen 2008](#ref-miettinen2008)), they are
 traditionally regarded as equally desirable (in the mathematical sense,
-that is). A decision maker (DM) is then consulted to pick a preferred
+that is). A decision-maker (DM) is then consulted to pick a preferred
 solution. Even worse, it may not be trivial to pick some most preferred
 solution, as the role of the chosen weights is misleading ([Roy and
 Mousseau 1996](#ref-roy1996theoretical)). The mathematical sense is,
@@ -50,25 +60,28 @@ scale, the distribution of their associated losses remains unknown and
 attainable loss is equally likely, which drastically exacerbates the DMs
 situation of having to pick *and* actually obtain the desired trade-off.
 
-We demonstrate an approach to approximating the order of Pareto
-efficient solutions, based on the marginal distributions of each
-objective. This approach transforms each objective into a score with
-standard uniform distribution, which allows comparing solution vectors.
-Used as either an a priori or a posteriori method, we can show that
-obtaining efficient solutions significantly closer to the desired
-trade-off is possible, using two distinct methods. The first method
-significantly improves precision by replacing the raw objectives with
-their scores during optimization. The second method improves the
-precision even more drastically, but requires the computation of some
-Pareto efficient solutions, in order to learn the non-linear mapping
-between preferences and solutions in the score space. None of the
-methods require the objectives to be scaled or having to know or
-approximate nadir-, ideal-, or utopian-vectors. Furthermore, by mapping
-objectives to scores, it allows a DM to gain insights into the density
-and homegenuity of the solution space, as well as to understand which
-trade-offs are actually possible. We use the Viennet function ([Viennet,
-Fonteix, and Marc 1996](#ref-viennet1996)) to empirically gather some
-results.
+We demonstrate an approach based on the marginal distributions of each
+objective to ordering single objectives, which further allows ordering
+Pareto efficient solutions. Using no- or just few additional preferences
+for each objective, multi-objective optimization problems can
+effectively be transformed into single-objective optimization problems,
+which removes the requirement of a decision-maker. This approach
+transforms each objective into a score with standard uniform
+distribution, which allows comparing solution vectors. Used as either an
+a priori or a posteriori method, we can show that obtaining efficient
+solutions significantly closer to the desired trade-off is possible,
+using two distinct methods. The first method significantly improves
+precision by replacing the raw objectives with their scores during
+optimization. The second method improves the precision even more
+drastically, but requires the computation of some Pareto efficient
+solutions, in order to learn the non-linear mapping between preferences
+and solutions in the score space. None of the methods require the
+objectives to be scaled or having to know or approximate nadir-, ideal-,
+or utopian-vectors. Furthermore, by mapping objectives to scores, it
+allows a DM to gain insights into the density and homogeneity of the
+solution space, as well as to understand which trade-offs are actually
+possible. We use the Viennet function ([Viennet, Fonteix, and Marc
+1996](#ref-viennet1996)) to empirically gather some results.
 
 # Transformation to scores
 
@@ -87,6 +100,12 @@ a value less than or equal to *x*. The results of the objective are
 ordered, and so is its corresponding CDF . However, the meaning of loss
 and score is still reversed, in that a low loss corresponds to a low
 chance of observing it. We therefore define the score for *f* as in ,
+
+$$
+\begin{align}
+  S_f:\mathbb{R}^m\mapsto\[0,1\]=1-\operatorname{CDF}\_f(f(\mathbf{x}))\label{eq:score-for-f},
+\end{align}
+$$
 
 where the operation 1 − CDF (*x*) = CCDF (*x*) is the *complementary*
 CDF . Now, a low loss of *f* will yield a high score for
@@ -117,8 +136,8 @@ specifying preference, a DM might obtain a solution close to that
 preference. However, that solution is in the objective space 𝒪,
 ***not*** in the score space 𝒮. The latter is perhaps the only space
 workable for human DMs. This means that so far, expressing preference
-with non-uniformly distributed objectives has never led to the desired
-solution.
+with non-uniformly distributed objectives has most likely not led to the
+desired solution.
 
 In order to obtain a trade-off close to the desired trade-off, we
 identify two methods. In the first method, the solution algorithm would
@@ -143,6 +162,12 @@ approximations of any of those vectors means we can dispense with the
 associated effort, and may also be able to use previously incompatible
 solution algorithms.
 
+$$
+\begin{align}
+  \max\_{\mathbf{x}\in\mathcal{D}}\\,\left\\{S_1(\mathbf{x}),\dots,S_k(\mathbf{x})\right\\}.\label{eq:moop-scores}
+\end{align}
+$$
+
 In the second method, we attempt to “rectify” the preference as
 expressed by the DM. As we have previously established, there does not
 exist a linear relation between some preference and its solution in the
@@ -154,6 +179,14 @@ full set . These solutions are computed to establish a bijection 𝒫 → �
 between the spaces for the desired- and obtained trade-off (i.e., which
 preference leads to which trade-off in the score space). Then, this
 relation is reversed and some model is fit that minimizes the deviation.
+
+$$
+\begin{align}
+  \mathcal{D}\_k&=\left\\{\left(\mathbf{\mathcal{P}}\_i,\mathbf{\mathcal{S}}\_i\right)\right\\}\_{i=1}^k\text{, dataset of bijections,}\label{eq:pref-bijections}
+  \\\\\[1ex\]
+  \mathsf{M}&=\min\\,\sum\_{j=i}^{k}\\,(\mathbf{S}\_i-\mathbf{P}\_i)^2\text{, non-linear model.}\label{eq:pref-nl-model}
+\end{align}
+$$
 
 This can be done as we now have a one-to-one correspondence between
 preferences and solutions in the score space. The DM is now enabled to
@@ -169,6 +202,20 @@ is defined as in ([Viennet, Fonteix, and Marc 1996](#ref-viennet1996)).
 The box bounds for the decision space 𝒟 for this problem are sometimes
 limited to  − 3 ≤ *x*<sub>1</sub>, *x*<sub>2</sub> ≤ 3, but there is no
 practical difference using the slightly larger bounds as we do.
+
+$$
+\begin{align}
+  \min\_{\mathbf{x}\in\mathbb{R}^2}\\,&\begin{cases}
+    f_1(\mathbf{x})&=0.5\left(x_1^2+x_2^2\right) + \sin{\left(x_1^2+x_2^2\right)},
+    \\\\\[1em\]
+    f_2(\mathbf{x})&=\frac{(3x_1-2x_2+4)^2}{8}+\frac{(x_1-x_2+1)^2}{27}+15,
+    \\\\\[1ex\]
+    f_3(\mathbf{x})&=\frac{1}{x_1^2+x_2^2+1}-1.1\exp{\left(-x_1^2-x_2^2\right)},
+  \end{cases}\label{eq:viennet}
+  \\\\\[1ex\]
+  &\text{subject to }-4\leq x_1,x_2\leq4\nonumber.
+\end{align}
+$$
 
 Figure shows the Pareto front of the efficient set. In order to obtain
 the front, we compute 50, 000 solutions by drawing preference
@@ -227,7 +274,8 @@ additional assumptions about which objective is the most important.
 The total scores for each of the solutions are in the interval
 \[≈1.848,≈2.856\]. This means that any solution with arbitrary
 combination of scores less than  ≈ 1.848 is not Pareto efficient. There
-is a unique best solution for this problem with objective values of
+is a unique best solution at **x** ≈ {−0.6708,0.4449} for this problem
+with objective values of
 {*f*<sub>1</sub>≈0.9231,*f*<sub>2</sub>≈15.1532,*f*<sub>3</sub>≈0.0307},
 marked by a red square in figure . The solution marked by the purple
 square is the worst in the Pareto efficient set. A lighter color in this
@@ -277,9 +325,10 @@ preference.](pareto-order_files/figure-gfm/ex2-nnet-1.png)
 
 Figure shows a significant improvement of the obtained trade-offs using
 a corrected preference. We also generate some quantiles (see table ).
-While still not perfect, 50% of all trade-offs show a mean absolute
-error of  ≈ 0.129. We also obtain much less extreme deviations, and no
-deviation is larger than  ≈ 0.679.
+While still not perfect, 50% of all trade-off ratios show a mean
+absolute error of  ≈ 0.07. We also obtain much less extreme deviations,
+with the 90% quantile being  ≈ 0.46 (compared to  ≈ 0.98 of the original
+problem).
 
 ### Online correction
 
@@ -296,33 +345,36 @@ function, to account for extreme values not observed so far. This is
 conceptually similar to how the utopian vector is created:
 **z**<sup>⋆⋆</sup> = **z**<sup>⋆</sup> − *ϵ*.
 
-| Quantile | org     | corr    | online  |
-|:---------|:--------|:--------|:--------|
-| 0%       | 0.00097 | 0.00014 | 0.0022  |
-| 10%      | 0.22227 | 0.02509 | 0.12085 |
-| 20%      | 0.3299  | 0.0466  | 0.17645 |
-| 30%      | 0.41604 | 0.0702  | 0.21976 |
-| 40%      | 0.48882 | 0.09704 | 0.25631 |
-| 50%      | 0.55705 | 0.12936 | 0.29087 |
-| 60%      | 0.61541 | 0.16502 | 0.32463 |
-| 70%      | 0.66959 | 0.20302 | 0.36233 |
-| 80%      | 0.72986 | 0.24511 | 0.40791 |
-| 90%      | 0.80762 | 0.30837 | 0.46497 |
-| 100%     | 0.99669 | 0.67856 | 0.5895  |
+| Quantile | Original | Corrected | Online   |
+|:---------|:---------|:----------|:---------|
+| 0%       | 0        | 0         | 0        |
+| 10%      | 0.018459 | 0         | 0        |
+| 20%      | 0.122195 | 0         | 0.000204 |
+| 30%      | 0.260003 | 0.0125    | 0.047452 |
+| 40%      | 0.413626 | 0.035268  | 0.065401 |
+| 50%      | 0.569584 | 0.069995  | 0.201007 |
+| 60%      | 0.712592 | 0.12443   | 0.349856 |
+| 70%      | 0.844349 | 0.205283  | 0.484567 |
+| 80%      | 0.926327 | 0.268911  | 0.600264 |
+| 90%      | 0.97594  | 0.459699  | 0.715515 |
+| 100%     | 1        | 0.999488  | 0.999596 |
 
-Quantiles of trade-off errors for the original-, corrected- and online
-preferences.
+Quantiles of trade-off absolute ratio errors for the original-,
+corrected- and online preferences.
 
-<img src="pareto-order_files/figure-gfm/ex2-tradeoffs-org-vs-corr-online-1.png" title="The mean absolute error of the original, corrected, and online trade-offs." alt="The mean absolute error of the original, corrected, and online trade-offs." width="90%" style="display: block; margin: auto;" />
+<img src="pareto-order_files/figure-gfm/ex2-tradeoffs-org-vs-corr-online-1.png" title="The absolute error of the original, corrected, and online trade-offs." alt="The absolute error of the original, corrected, and online trade-offs." width="90%" style="display: block; margin: auto;" />
 
 Similar to the method of a priori correction of preference, this method
 achieves trade-offs that are significantly closer to the desired
-trade-off. Figure shows that approx. 50% or more of all trade-offs are
-off by less than 0.3 for each single objective in the score space. If we
-compare the quantiles of this method to the a priori correction method
-(table ), then we see that the online method has a consistently larger
-error than the a prior correction method, but its distribution is more
-compact, in that the largest error was  ≈ 0.09 less (the 100% quantile).
+trade-off. Figure show a density of absolute errors for the online
+method similar to the one obtained using corrected trade-offs.
+Approximately 50% of each single ratio are off absolutely by 0.2 or less
+for it. For the method of corrected trade-offs, single approx. 50% of
+all ratios are off by 0.07 or less. If we compare the quantiles of this
+method to the a priori correction method (table ), then we see that the
+online method has a consistently larger error than the a priori
+correction method. The mean absolute deviation for each ratio and method
+is  ≈ 0.5345 (original),  ≈ 0.1545 (corrected), and  ≈ 0.2915 (online).
 
 ## Examining possible trade-offs
 
@@ -407,6 +459,14 @@ Fritsch, Stefan, Frauke Guenther, and Marvin N. Wright. 2019.
 Gablonsky, Joerg M., and Carl T. Kelley. 2001. “A Locally-Biased Form of
 the DIRECT Algorithm.” *J. Glob. Optim.* 21 (1): 27–37.
 <https://doi.org/10.1023/A:1017930332101>.
+
+</div>
+
+<div id="ref-honel2022pareto" class="csl-entry">
+
+Hönel, Sebastian, and Welf Löwe. 2022. “An Approach to Ordering
+Objectives and Pareto Efficient Solutions.” arXiv.
+<https://doi.org/10.48550/arXiv.2205.15291>.
 
 </div>
 
