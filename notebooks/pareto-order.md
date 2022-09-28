@@ -1,15 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
 -   <a href="#introduction" id="toc-introduction">Introduction</a>
 -   <a href="#transformation-to-scores"
     id="toc-transformation-to-scores">Transformation to scores</a>
@@ -43,7 +31,7 @@
 the arXiv pre-print server is ([Hönel and Löwe
 2022](#ref-honel2022pareto)).
 
-Solving multi-objective optimization problems (MOOPs, ) are problems of
+Solving multi-objective optimization problems (MOOPs, \eqref{eq:moop}) are problems of
 two or more conflicting problems (or objectives).
 
 $$
