@@ -1,3 +1,15 @@
+
+
+
+
+
+
+
+
+
+
+
+
 -   <a href="#introduction" id="toc-introduction">Introduction</a>
 -   <a href="#transformation-to-scores"
     id="toc-transformation-to-scores">Transformation to scores</a>
@@ -35,9 +47,9 @@ Solving multi-objective optimization problems (MOOPs, ) are problems of
 two or more conflicting problems (or objectives).
 
 $$
-\begin{align}
-  \min\_{\mathbf{x}\in\mathcal{D}}\\,\left\\{f_1(\mathbf{x}),\dots,f_k(\mathbf{x})\right\\},\text{ where $k\geq2$.}\label{eq:moop}
-\end{align}
+\begin{aligned}
+  \min\_{\mathbf{x}\in\mathcal{D}}\\,\left\\{f_1(\mathbf{x}),\dots,f_k(\mathbf{x})\right\\},\text{ where}\\;k\geq2\label{eq:moop}
+\end{aligned}
 $$
 
 The goal is to find some **x**<sup>⋆</sup> in the *decision space* 𝒟
@@ -102,9 +114,9 @@ and score is still reversed, in that a low loss corresponds to a low
 chance of observing it. We therefore define the score for *f* as in ,
 
 $$
-\begin{align}
+\begin{aligned}
   S_f:\mathbb{R}^m\mapsto\[0,1\]=1-\operatorname{CDF}\_f(f(\mathbf{x}))\label{eq:score-for-f},
-\end{align}
+\end{aligned}
 $$
 
 where the operation 1 − CDF (*x*) = CCDF (*x*) is the *complementary*
@@ -163,9 +175,9 @@ associated effort, and may also be able to use previously incompatible
 solution algorithms.
 
 $$
-\begin{align}
+\begin{aligned}
   \max\_{\mathbf{x}\in\mathcal{D}}\\,\left\\{S_1(\mathbf{x}),\dots,S_k(\mathbf{x})\right\\}.\label{eq:moop-scores}
-\end{align}
+\end{aligned}
 $$
 
 In the second method, we attempt to “rectify” the preference as
@@ -181,11 +193,11 @@ preference leads to which trade-off in the score space). Then, this
 relation is reversed and some model is fit that minimizes the deviation.
 
 $$
-\begin{align}
+\begin{aligned}
   \mathcal{D}\_k&=\left\\{\left(\mathbf{\mathcal{P}}\_i,\mathbf{\mathcal{S}}\_i\right)\right\\}\_{i=1}^k\text{, dataset of bijections,}\label{eq:pref-bijections}
   \\\\\[1ex\]
   \mathsf{M}&=\min\\,\sum\_{j=i}^{k}\\,(\mathbf{S}\_i-\mathbf{P}\_i)^2\text{, non-linear model.}\label{eq:pref-nl-model}
-\end{align}
+\end{aligned}
 $$
 
 This can be done as we now have a one-to-one correspondence between
@@ -204,7 +216,7 @@ limited to  − 3 ≤ *x*<sub>1</sub>, *x*<sub>2</sub> ≤ 3, but 
 practical difference using the slightly larger bounds as we do.
 
 $$
-\begin{align}
+\begin{aligned}
   \min\_{\mathbf{x}\in\mathbb{R}^2}\\,&\begin{cases}
     f_1(\mathbf{x})&=0.5\left(x_1^2+x_2^2\right) + \sin{\left(x_1^2+x_2^2\right)},
     \\\\\[1em\]
@@ -214,7 +226,7 @@ $$
   \end{cases}\label{eq:viennet}
   \\\\\[1ex\]
   &\text{subject to }-4\leq x_1,x_2\leq4\nonumber.
-\end{align}
+\end{aligned}
 $$
 
 Figure shows the Pareto front of the efficient set. In order to obtain

@@ -79,9 +79,11 @@ _Please note_: This is early-stage research. The canonical reference to the arXi
 
 Solving multi-objective optimization problems (MOOPs, \eqref{eq:moop}) are problems of two or more conflicting problems (or objectives).
 
-\begin{align}
-  \min_{\mathbf{x}\in\mathcal{D}}\,\left\{f_1(\mathbf{x}),\dots,f_k(\mathbf{x})\right\},\text{ where $k\geq2$.}\label{eq:moop}
-\end{align}
+$$
+\begin{aligned}
+  \min_{\mathbf{x}\in\mathcal{D}}\,\left\{f_1(\mathbf{x}),\dots,f_k(\mathbf{x})\right\},\text{ where}\;k\geq2\label{eq:moop}
+\end{aligned}
+$$
 
 The goal is to find some $\mathbf{x}^\star$ in the _decision space_ $\mathcal{D}$ that minimizes the loss across all single objectives simultaneously.
 Their solving may lead to a (possibly infinitely) large solution space $\mathcal{S}$.
@@ -115,9 +117,11 @@ The cumulative distribution $\operatorname{CDF}$ of a random variable expresses 
 The results of the objective are ordered, and so is its corresponding $\operatorname{CDF}$. However, the meaning of loss and score is still reversed, in that a low loss corresponds to a low chance of observing it.
 We therefore define the score for $f$ as in \eqref{eq:score-for-f},
 
-\begin{align}
+$$
+\begin{aligned}
   S_f:\mathbb{R}^m\mapsto[0,1]=1-\operatorname{CDF}_f(f(\mathbf{x}))\label{eq:score-for-f},
-\end{align}
+\end{aligned}
+$$
 
 where the operation $1-\operatorname{CDF}(x)=\operatorname{CCDF}(x)$ is the _complementary_ $\operatorname{CDF}$.
 Now, a low loss of $f$ will yield a high score for $S_f$, and vice versa.
@@ -150,9 +154,11 @@ The weighting methods require their objectives to have the same range, which we 
 This is an important point, as by sufficiently approximating those, we do not have to approximate the nadir-, ideal-, or utopian-vectors, which are otherwise required for proper scaling.
 Especially the nadir-vector is difficult to obtain in practice [@miettinen2008], so not requiring precise approximations of any of those vectors means we can dispense with the associated effort, and may also be able to use previously incompatible solution algorithms.
 
-\begin{align}
+$$
+\begin{aligned}
   \max_{\mathbf{x}\in\mathcal{D}}\,\left\{S_1(\mathbf{x}),\dots,S_k(\mathbf{x})\right\}.\label{eq:moop-scores}
-\end{align}
+\end{aligned}
+$$
 
 
 In the second method, we attempt to "rectify" the preference as expressed by the DM. As we have previously established, there does not exist a linear relation between some preference and its solution in the score space.
@@ -162,11 +168,13 @@ Typically, this set is considerably smaller than the full set \eqref{eq:pref-bij
 These solutions are computed to establish a bijection $\mathcal{P}\to\mathcal{S}$ between the spaces for the desired- and obtained trade-off (i.e., which preference leads to which trade-off in the score space).
 Then, this relation is reversed and some model \eqref{eq:pref-nl-model} is fit that minimizes the deviation.
 
-\begin{align}
+$$
+\begin{aligned}
   \mathcal{D}_k&=\left\{\left(\mathbf{\mathcal{P}}_i,\mathbf{\mathcal{S}}_i\right)\right\}_{i=1}^k\text{, dataset of bijections,}\label{eq:pref-bijections}
   \\[1ex]
   \mathsf{M}&=\min\,\sum_{j=i}^{k}\,(\mathbf{S}_i-\mathbf{P}_i)^2\text{, non-linear model.}\label{eq:pref-nl-model}
-\end{align}
+\end{aligned}
+$$
 
 This can be done as we now have a one-to-one correspondence between preferences and solutions in the score space.
 The DM is now enabled to express their preference, and the learned model corrects this preference in order to converge to an efficient solution close to the desired trade-off.
@@ -179,7 +187,8 @@ The Viennet function consists of three objectives, each of which takes the same 
 It is defined as in \eqref{eq:viennet} [@viennet1996].
 The box bounds for the decision space $\mathcal{D}$ for this problem are sometimes limited to $-3\leq x_1,x_2\leq3$, but there is no practical difference using the slightly larger bounds as we do.
 
-\begin{align}
+$$
+\begin{aligned}
   \min_{\mathbf{x}\in\mathbb{R}^2}\,&\begin{cases}
     f_1(\mathbf{x})&=0.5\left(x_1^2+x_2^2\right) + \sin{\left(x_1^2+x_2^2\right)},
     \\[1em]
@@ -189,7 +198,8 @@ The box bounds for the decision space $\mathcal{D}$ for this problem are sometim
   \end{cases}\label{eq:viennet}
   \\[1ex]
   &\text{subject to }-4\leq x_1,x_2\leq4\nonumber.
-\end{align}
+\end{aligned}
+$$
 
 
 Figure \ref{fig:ex2-pareto-front} shows the Pareto front of the efficient set. In order to obtain the front, we compute $50,000$ solutions by drawing preference constellations uniform randomly from the preference space $\mathcal{P}$.
@@ -416,7 +426,7 @@ Since the problem is relatively small, we settle for a single hidden layer with 
 From that figure we see that the preference is now actually specified in the solution space $\mathcal{S}$, and that the network will predict the associated preference in the preference space, $\mathcal{P}$.
 
 
-```{r}
+```{r eval=TRUE}
 temp <- ex2_pareto_front_original[, 4:6] # original objectives' values
 ex2_ml_x <- do.call(rbind, unlist(apply(X = temp, MARGIN = 1, FUN = function(row) {
   row <- as.numeric(row)
@@ -436,7 +446,7 @@ if (interactive()) {
 }
 ```
 
-```{r}
+```{r eval=TRUE}
 # For Y, we only need to re-scale the weights.
 temp <- ex2_pareto_front_original[, 1:3] # The original preference
 ex2_ml_y <- do.call(rbind, unlist(apply(X = temp, MARGIN = 1, FUN = function(row) {
@@ -454,19 +464,23 @@ if (interactive()) {
 ```
 
 ```{r eval=TRUE}
+set.seed(1)
+temp <- sample(x = 1:nrow(ex2_ml_x), size = nrow(ex2_ml_x))
+idx_train <- temp[1:2500]
+idx_valid <- temp[2501:nrow(ex2_ml_x)]
+
+train_x <- ex2_ml_x[idx_train,]
+train_y <- ex2_ml_y[idx_train,]
+
+valid_x <- ex2_ml_x[idx_valid,]
+valid_y <- ex2_ml_y[idx_valid,]
+```
+
+
+
+```{r eval=TRUE}
 nnet <- loadResultsOrCompute(file = "../results/ex2_nnet.rds", computeExpr = {
   library(neuralnet)
-
-  set.seed(1)
-  temp <- sample(x = 1:nrow(ex2_ml_x), size = nrow(ex2_ml_x))
-  idx_train <- temp[1:2500]
-  idx_valid <- temp[2501:nrow(ex2_ml_x)]
-  
-  train_x <- ex2_ml_x[idx_train,]
-  train_y <- ex2_ml_y[idx_train,]
-  
-  valid_x <- ex2_ml_x[idx_valid,]
-  valid_y <- ex2_ml_y[idx_valid,]
   
   set.seed(2)
   neuralnet(
@@ -819,6 +833,24 @@ plot3D::scatter3D(x = temp1[,1], y = temp1[,2], z = temp1[,3], add = FALSE, xlim
 ```
 
 
+```{r}
+temp <- ex2_pareto_front_scores[, c(paste0("s", 1:3), "s_total")]
+#temp <- temp[temp$s1 > 0.7 & temp$s2 > 0.7 & temp$s3 > 0.7,]
+temp$l1 <- 1 - temp$s1
+temp$l2 <- 1 - temp$s2
+temp$l3 <- 1 - temp$s3
+temp$l_total <- 3 - temp$s_total
+
+plot3D::scatter3D(x = temp$l1, y = temp$l2, z = temp$l3, colvar = temp$l_total, col = rev(viridis::viridis(100)), phi = 10, theta = 20, r = 2, ticktype = "detailed", nticks = 5, pch = 16, cex.p = 1, clab = "Loss", colkey = list("dist" = -0.1, "length" = .66, "width" = .66, "cex.clab" = 0.8), xlab = "Loss 1", ylab = "Loss 2", zlab = "Loss 3", bty = "b2", xlim = c(0,1), ylim = c(0,1), zlim = c(0,1))
+```
+```{r}
+rgl::plot3d(x = temp$s1, y = temp$s2, z = temp$s3, xlab = "f1", ylab = "f2", zlab = "f3", xlim = c(0,1), ylim=c(0,1), zlim=c(0,1), add=FALSE)
+```
+
+
+
+
+
 The Pareto front of the Viennet function has a complex shape. If we map the results gotten into the score space $\mathcal{S}$, it will allow us to understand which trade-offs are actually feasible.
 This is another important piece, as some DM might not be aware that the requested trade-off is not possible (that is, there is no Pareto optimal solution with the given trade-off, or close to it).
 Figure \ref{fig:ex2-tradeoff-density-2d} shows the trade-off ratios between the scores that were actually reached by the solutions in the Pareto efficient set.
@@ -831,12 +863,41 @@ pref_to_ratio <- function(p) {
   p <- p / max(p)
   c(p[1]/p[2], p[2]/p[3])
 }
-ratio_to_pref <- function(r) {
+ratio_to_pref <- function(r, normalize = FALSE) {
   s <- c(r[1], 1, 1/r[2])
-  s / max(s)
+  s <- s / max(s)
+  if (normalize) {
+    s <- s / sum(s)
+  }
+  s
 }
 stopifnot(all.equal(c(0.2, 1.0, 0.9), ratio_to_pref(pref_to_ratio(c(0.2, 1.0, 0.9)))))
 ```
+
+```{r}
+ratio_to_rel_len <- function(r) {
+  # For example, 4:1 -> 1,4,4 / 9 = 1/9, 4/9, 4/9
+  # 4 is the ratio between l1,l2, and 1 is the ratio between l2,l3
+  # Or, in other words, if l1=l2, then l3 is one third of what l2 is
+  # r is the ratios between interval pairs, not the intervals per se
+  r <- r / max(r)
+  lens <- c(1, rep(NA_real_, length(r)))
+  for (i in 1:length(r)) {
+    lens[i + 1] <- lens[i] * r[i]
+  }
+  lens / sum(lens)
+}
+
+rel_len_to_ratio <- function(l) {
+  # For example, 2,3,4 = 2/9, 3/9, 4/9 -> 1.5:1.333
+  ratios <- rep(NA_real_, length(l) - 1)
+  for (i in 1:length(ratios)) {
+    ratios[i] <- l[i + 1] / l[i]
+  }
+  ratios
+}
+```
+
 
 ```{r eval=TRUE}
 # Let's map the Pareto front's objective values into the score space,
@@ -873,7 +934,7 @@ ex2_tradeoff_density_2d <- loadResultsOrCompute(file = "../results/ex2_tradeoff_
 ```
 
 ```{r eval=FALSE}
-persp3d(x=ex2_tradeoff_density_2d$x, y = ex2_tradeoff_density_2d$y, z = ex2_tradeoff_density_2d$z,
+rgl::persp3d(x=ex2_tradeoff_density_2d$x, y = ex2_tradeoff_density_2d$y, z = ex2_tradeoff_density_2d$z,
         aspect = c(1, 1, 0.5), col = "lightblue", polygon_offset = 1)
 highlevel()
 ```
@@ -986,7 +1047,6 @@ ex2_possible_tradeoff_ratios_org_diffs <- loadResultsOrCompute(file = "../result
     "tradeoffs_org" = tradeoffs_org,
     "diffs_org_for_working" = diffs_org_for_working)
 })
-
 ```
 
 
