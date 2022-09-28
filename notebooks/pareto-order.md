@@ -1,3 +1,9 @@
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  TeX: { equationNumbers: { autoNumber: "AMS" } }
+});
+</script>
+
 -   <a href="#introduction" id="toc-introduction">Introduction</a>
 -   <a href="#transformation-to-scores"
     id="toc-transformation-to-scores">Transformation to scores</a>
