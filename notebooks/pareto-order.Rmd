@@ -16,6 +16,11 @@ urlcolor: blue
 link-citations: yes
 linkcolor: blue
 output:
+  md_document:
+    toc: yes
+    toc_depth: 6
+    df_print: kable
+    variant: gfm
   bookdown::pdf_document2:
     fig_caption: yes
     number_sections: yes
@@ -23,11 +28,6 @@ output:
     toc_depth: 6
     df_print: kable
     keep_tex: yes
-  md_document:
-    toc: yes
-    toc_depth: 6
-    df_print: kable
-    variant: gfm
   html_document:
     number_sections: yes
     toc: yes
@@ -77,7 +77,7 @@ Sys.setenv(LC_CTYPE = "en_US.UTF-8")
 
 _Please note_: This is early-stage research. The canonical reference to the arXiv pre-print server is [@honel2022pareto].
 
-Solving multi-objective optimization problems (MOOPs, $\eqref{eq:moop}$) are problems of two or more conflicting problems (or objectives).
+Solving multi-objective optimization problems (MOOPs, \eqref{eq:moop}) are problems of two or more conflicting problems (or objectives).
 
 
 $$
@@ -117,7 +117,7 @@ Any random variable can be transformed into another random variable with standar
 For our purposes, the standard uniform distribution suffices, as its range is $[0,1]$, which corresponds to what one would expect from a score.
 The cumulative distribution $\operatorname{CDF}$ of a random variable expresses the probability to find a value less than or equal to $x$.
 The results of the objective are ordered, and so is its corresponding $\operatorname{CDF}$. However, the meaning of loss and score is still reversed, in that a low loss corresponds to a low chance of observing it.
-We therefore define the score for $f$ as in $\eqref{eq:score-for-f}$,
+We therefore define the score for $f$ as in \eqref{eq:score-for-f},
 
 $$
 \begin{aligned}
@@ -147,7 +147,7 @@ The latter is perhaps the only space workable for human DMs. This means that so 
 
 
 In order to obtain a trade-off close to the desired trade-off, we identify two methods.
-In the first method, the solution algorithm would solve a version of the original problem, but based on the scores $\eqref{eq:moop-scores}$.
+In the first method, the solution algorithm would solve a version of the original problem, but based on the scores \eqref{eq:moop-scores}.
 Since we have a one-to-one association between preference and score, this method ought to converge towards the desired trade-off more accurately.
 This method usually requires a somewhat better empirical approximation of the marginal cumulative densities, or some well-fitting parametric probability distribution.
 In the former case, measures for introducing smoothness into the empirical $\operatorname{CDF}$s have to be taken as otherwise, the gradient of the problem will be zero, making this method only applicable in gradient-free scenarios.
@@ -166,9 +166,9 @@ $$
 In the second method, we attempt to "rectify" the preference as expressed by the DM. As we have previously established, there does not exist a linear relation between some preference and its solution in the score space.
 We can however approximate that non-linear relationship, too.
 By uniform randomly sampling from the _preference space_ $\mathcal{P}$, we first compute a sufficiently large subset of the Pareto optimal set in the score space.
-Typically, this set is considerably smaller than the full set $\eqref{eq:pref-bijections}$.
+Typically, this set is considerably smaller than the full set \eqref{eq:pref-bijections}.
 These solutions are computed to establish a bijection $\mathcal{P}\to\mathcal{S}$ between the spaces for the desired- and obtained trade-off (i.e., which preference leads to which trade-off in the score space).
-Then, this relation is reversed and some model $\eqref{eq:pref-nl-model}$ is fit that minimizes the deviation.
+Then, this relation is reversed and some model \eqref{eq:pref-nl-model} is fit that minimizes the deviation.
 
 $$
 \begin{aligned}
@@ -186,7 +186,7 @@ The DM is now enabled to express their preference, and the learned model correct
 # The Viennet function
 
 The Viennet function consists of three objectives, each of which takes the same two parameters $\mathbf{x}=\{x_1,x_2\}$.
-It is defined as in $\eqref{eq:viennet}$ [@viennet1996].
+It is defined as in \eqref{eq:viennet} [@viennet1996].
 The box bounds for the decision space $\mathcal{D}$ for this problem are sometimes limited to $-3\leq x_1,x_2\leq3$, but there is no practical difference using the slightly larger bounds as we do.
 
 $$

@@ -1,3 +1,4 @@
+
 - <a href="#introduction" id="toc-introduction">Introduction</a>
 - <a href="#transformation-to-scores"
   id="toc-transformation-to-scores">Transformation to scores</a>
@@ -31,12 +32,12 @@
 the arXiv pre-print server is ([Hönel and Löwe
 2022](#ref-honel2022pareto)).
 
-Solving multi-objective optimization problems (MOOPs, $\eqref{eq:moop}$)
-are problems of two or more conflicting problems (or objectives).
+Solving multi-objective optimization problems (MOOPs) are problems of
+two or more conflicting problems (or objectives).
 
 $$
 \begin{aligned}
-  \min_{\mathbf{x}\in\mathcal{D}}\,\left\{f_1(\mathbf{x}),\dots,f_k(\mathbf{x})\right\},\text{ where}\;k\geq2\label{eq:moop}
+  \min\_{\mathbf{x}\in\mathcal{D}}\\,\left\\\{f_1(\mathbf{x}),\dots,f_k(\mathbf{x})\right\\\},\text{ where}\\;k\geq2
 \end{aligned}
 $$
 
@@ -101,12 +102,11 @@ probability to find a value less than or equal to $x$. The results of
 the objective are ordered, and so is its corresponding
 $\operatorname{CDF}$. However, the meaning of loss and score is still
 reversed, in that a low loss corresponds to a low chance of observing
-it. We therefore define the score for $f$ as in
-$\eqref{eq:score-for-f}$,
+it. We therefore define the score for $f$ as follows:
 
 $$
 \begin{aligned}
-  S_f:\mathbb{R}^m\mapsto[0,1]=1-\operatorname{CDF}_f(f(\mathbf{x}))\label{eq:score-for-f},
+  S_f:\mathbb{R}^m\mapsto[0,1]=1-\operatorname{CDF}_f(f(\mathbf{x})),
 \end{aligned}
 $$
 
@@ -144,22 +144,21 @@ likely not led to the desired solution.
 
 In order to obtain a trade-off close to the desired trade-off, we
 identify two methods. In the first method, the solution algorithm would
-solve a version of the original problem, but based on the scores
-$\eqref{eq:moop-scores}$. Since we have a one-to-one association between
-preference and score, this method ought to converge towards the desired
-trade-off more accurately. This method usually requires a somewhat
-better empirical approximation of the marginal cumulative densities, or
-some well-fitting parametric probability distribution. In the former
-case, measures for introducing smoothness into the empirical
-$\operatorname{CDF}$s have to be taken as otherwise, the gradient of the
-problem will be zero, making this method only applicable in
-gradient-free scenarios. This method also enables the simple weighting
-method and the method of *weighted metrics* (or compromise programming)
-([Zeleny 1973](#ref-zeleny1973compromise)). The weighting methods
-require their objectives to have the same range, which we will get by
-using $\operatorname{CDF}$s. This is an important point, as by
-sufficiently approximating those, we do not have to approximate the
-nadir-, ideal-, or utopian-vectors, which are otherwise required for
+solve a version of the original problem, but based on the scores. Since
+we have a one-to-one association between preference and score, this
+method ought to converge towards the desired trade-off more accurately.
+This method usually requires a somewhat better empirical approximation
+of the marginal cumulative densities, or some well-fitting parametric
+probability distribution. In the former case, measures for introducing
+smoothness into the empirical $\operatorname{CDF}$s have to be taken as
+otherwise, the gradient of the problem will be zero, making this method
+only applicable in gradient-free scenarios. This method also enables the
+simple weighting method and the method of *weighted metrics* (or
+compromise programming) ([Zeleny 1973](#ref-zeleny1973compromise)). The
+weighting methods require their objectives to have the same range, which
+we will get by using $\operatorname{CDF}$s. This is an important point,
+as by sufficiently approximating those, we do not have to approximate
+the nadir-, ideal-, or utopian-vectors, which are otherwise required for
 proper scaling. Especially the nadir-vector is difficult to obtain in
 practice ([Miettinen 2008](#ref-miettinen2008)), so not requiring
 precise approximations of any of those vectors means we can dispense
@@ -168,7 +167,7 @@ incompatible solution algorithms.
 
 $$
 \begin{aligned}
-  \max_{\mathbf{x}\in\mathcal{D}}\,\left\{S_1(\mathbf{x}),\dots,S_k(\mathbf{x})\right\}.\label{eq:moop-scores}
+  \max\_{\mathbf{x}\in\mathcal{D}}\\,\left\\\{S_1(\mathbf{x}),\dots,S_k(\mathbf{x})\right\\\}.
 \end{aligned}
 $$
 
@@ -179,18 +178,17 @@ score space. We can however approximate that non-linear relationship,
 too. By uniform randomly sampling from the *preference space*
 $\mathcal{P}$, we first compute a sufficiently large subset of the
 Pareto optimal set in the score space. Typically, this set is
-considerably smaller than the full set $\eqref{eq:pref-bijections}$.
-These solutions are computed to establish a bijection
-$\mathcal{P}\to\mathcal{S}$ between the spaces for the desired- and
-obtained trade-off (i.e., which preference leads to which trade-off in
-the score space). Then, this relation is reversed and some model
-$\eqref{eq:pref-nl-model}$ is fit that minimizes the deviation.
+considerably smaller than the full set. These solutions are computed to
+establish a bijection $\mathcal{P}\to\mathcal{S}$ between the spaces for
+the desired- and obtained trade-off (i.e., which preference leads to
+which trade-off in the score space). Then, this relation is reversed and
+some model is fit that minimizes the deviation.
 
 $$
 \begin{aligned}
-  \mathcal{D}_k&=\left\{\left(\mathbf{\mathcal{P}}_i,\mathbf{\mathcal{S}}_i\right)\right\}_{i=1}^k\text{, dataset of bijections,}\label{eq:pref-bijections}
-  \\[1ex]
-  \mathsf{M}&=\min\,\sum_{j=i}^{k}\,(\mathbf{S}_i-\mathbf{P}_i)^2\text{, non-linear model.}\label{eq:pref-nl-model}
+  \mathcal{D}_k&=\left\\\{\left(\mathbf{\mathcal{P}}_i,\mathbf{\mathcal{S}}_i\right)\right\\\}\_{i=1}^k\text{, dataset of bijections,}
+  \\\\\[1ex\]
+  \mathsf{M}&=\min\\,\sum\_{j=i}^{k}\\,(\mathbf{S}_i-\mathbf{P}_i)^2\text{, non-linear model.}
 \end{aligned}
 $$
 
@@ -204,23 +202,22 @@ trade-off.
 
 The Viennet function consists of three objectives, each of which takes
 the same two parameters $\mathbf{x}=\{x_1,x_2\}$. It is defined as in
-$\eqref{eq:viennet}$ ([Viennet, Fonteix, and Marc
-1996](#ref-viennet1996)). The box bounds for the decision space
-$\mathcal{D}$ for this problem are sometimes limited to
-$-3\leq x_1,x_2\leq3$, but there is no practical difference using the
-slightly larger bounds as we do.
+([Viennet, Fonteix, and Marc 1996](#ref-viennet1996)). The box bounds
+for the decision space $\mathcal{D}$ for this problem are sometimes
+limited to $-3\leq x_1,x_2\leq3$, but there is no practical difference
+using the slightly larger bounds as we do.
 
 $$
 \begin{aligned}
-  \min_{\mathbf{x}\in\mathbb{R}^2}\,&\begin{cases}
+  \min\_{\mathbf{x}\in\mathbb{R}^2}\\,&\begin{cases}
     f_1(\mathbf{x})&=0.5\left(x_1^2+x_2^2\right) + \sin{\left(x_1^2+x_2^2\right)},
-    \\[1em]
+    \\\\\[1em\]
     f_2(\mathbf{x})&=\frac{(3x_1-2x_2+4)^2}{8}+\frac{(x_1-x_2+1)^2}{27}+15,
-    \\[1ex]
+    \\\\\[1ex\]
     f_3(\mathbf{x})&=\frac{1}{x_1^2+x_2^2+1}-1.1\exp{\left(-x_1^2-x_2^2\right)},
-  \end{cases}\label{eq:viennet}
-  \\[1ex]
-  &\text{subject to }-4\leq x_1,x_2\leq4\nonumber.
+  \end{cases}
+  \\\\\[1ex\]
+  &\text{subject to }-4\leq x_1,x_2\leq4.
 \end{aligned}
 $$
 
@@ -283,9 +280,9 @@ The total scores for each of the solutions are in the interval
 $[{\approx}1.848,{\approx}2.856]$. This means that any solution with
 arbitrary combination of scores less than ${\approx}1.848$ is not Pareto
 efficient. There is a unique best solution at
-$\mathbf{x}\approx\left\{-0.6708,0.4449\right\}$ for this problem with
+$\mathbf{x}\approx\left\\\{-0.6708,0.4449\right\\\}$ for this problem with
 objective values of
-$\left\{f_1\approx0.9231,f_2\approx15.1532,f_3\approx0.0307\right\}$,
+$\left\\\{f_1\approx0.9231,f_2\approx15.1532,f_3\approx0.0307\right\\\}$,
 marked by a red square in figure . The solution marked by the purple
 square is the worst in the Pareto efficient set. A lighter color in this
 figure indicates a higher total score. The distribution of the total
